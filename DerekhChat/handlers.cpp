@@ -1,41 +1,44 @@
-#include <ctime>
-
 #include "chat_client.h"
 #include "message_builder.h"
 #include "message_formats.h"
+#include "utils.h"
 
 ChatClient* ChatClient::Handler::_chatClient = 0;
 
-void ChatClient::handlerEnter::handle(const char*, size_t) {
+void ChatClient::handlerEnter::handle(const char*, size_t)
+{
 	_chatClient->printSysMessage(_chatClient->_recvEndpoint, "enter chat");
 }
 
-void ChatClient::handlerQuit::handle(const char*, size_t) {
+void ChatClient::handlerQuit::handle(const char*, size_t)
+{
 	_chatClient->printSysMessage(_chatClient->_recvEndpoint, "quit chat");
 }
 
-void ChatClient::handlerText::handle(const char* data, size_t) {
+void ChatClient::handlerText::handle(const char* data, size_t)
+{
 	// output to the console
 	MessageText* mt = (MessageText*)data;
-	std::cout << _chatClient->_recvEndpoint.address().to_string() << " > ";
-	std::wcout.write(mt->text, mt->length);
-	std::cout << std::endl;
+	cout << _chatClient->_recvEndpoint.address().to_string() << " > ";
+	wcout.write(mt->text, mt->length);
+	cout << endl;
 }
 
-void ChatClient::handlerFileBegin::handle(const char* data, size_t) {
+void ChatClient::handlerFileBegin::handle(const char* data, size_t)
+{
 	MessageFileBegin* mfb = (MessageFileBegin*)data;
-	std::auto_ptr< FileContext > ctx(new FileContext);
+	auto_ptr< UploadingFilesContext > ctx(new UploadingFilesContext);
 
 	// maybe we have the same already (is downloading)
 
-	std::stringstream ss;
+	stringstream ss;
 	ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfb->id;
-	std::string key(ss.str());
+	string key(ss.str());
 
-	FilesMap::iterator it = _chatClient->_files.find(key);
+	UploadingFilesMap::iterator it = _chatClient->_files.find(key);
 	if (it != _chatClient->_files.end())
 	{
-		ss.str(std::string());
+		ss.str(string());
 		ss << "this file is already downloading '" << mfb->name << "'";
 		_chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
 		return;
@@ -48,17 +51,17 @@ void ChatClient::handlerFileBegin::handle(const char* data, size_t) {
 
 	mfb->name[mfb->nameLength] = '\0';
 
-	ctx->fp.open(mfb->name, std::ios_base::out | std::ios_base::trunc | std::ios_base::binary);
+	ctx->fp.open(mfb->name, ios_base::out | ios_base::trunc | ios_base::binary);
 
 	if (!ctx->fp.is_open())
 	{
-		ss.str(std::string());
+		ss.str(string());
 		ss << "can't open for writing '" << mfb->name << "'";
 		_chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
 		return;
 	}
 
-	ss.str(std::string());
+	ss.str(string());
 	ss << "start loading file '" << mfb->name << "'";
 	_chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
 
@@ -69,8 +72,8 @@ void ChatClient::handlerFileBegin::handle(const char* data, size_t) {
 	ctx->blocks = mfb->totalBlocks;
 	ctx->resendCount = 0;
 	ctx->blocksReceived = 0;
-	ctx->name = std::string(mfb->name, mfb->nameLength);
-	ctx->ts = std::time(0);
+	ctx->name = string(mfb->name, mfb->nameLength);
+	ctx->ts = time(0);
 
 	// requesting the first packet
 	_chatClient->sendResendMsg(ctx.get());
@@ -80,28 +83,29 @@ void ChatClient::handlerFileBegin::handle(const char* data, size_t) {
 	return;
 }
 
-void ChatClient::handlerFileBlock::handle(const char *data, size_t) {
-	MessageFileBlock * mfp = (MessageFileBlock*)data;
+void ChatClient::handlerFileBlock::handle(const char *data, size_t)
+{
+	MessageFileBlock* mfp = (MessageFileBlock*)data;
 
-	std::stringstream ss;
+	stringstream ss;
 	ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfp->id;
 
-	std::string key(ss.str());
-	FileContext * ctx = 0;
-	FilesMap::iterator it = _chatClient->_files.find(key);
+	string key(ss.str());
+	UploadingFilesContext* ctx = 0;
+	UploadingFilesMap::iterator it = _chatClient->_files.find(key);
 	if (it != _chatClient->_files.end())
 		ctx = _chatClient->_files[key];
 
 	if (ctx == 0 || mfp->block >= ctx->blocks)
 	{
-		_chatClient->printSysMessage(_chatClient->_recvEndpoint, "recived block out of queue!");
+		_chatClient->printSysMessage(_chatClient->_recvEndpoint, "received block is out of queue!");
 		return;
 	}
 
 	ctx->fp.write(mfp->data, mfp->size);
 	ctx->resendCount = 0;
 	ctx->blocksReceived += 1;
-	ctx->ts = std::time(0);
+	ctx->ts = time(0);
 
 	// we have all blocks?
 
@@ -116,7 +120,7 @@ void ChatClient::handlerFileBlock::handle(const char *data, size_t) {
 
 	if (!(mfp->block % 89))
 	{
-		ss.str(std::string());
+		ss.str(string());
 		ss << "downloaded block " << mfp->block << " from " << ctx->blocks;
 		_chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
 	}
@@ -128,14 +132,13 @@ void ChatClient::handlerFileBlock::handle(const char *data, size_t) {
 	return;
 }
 
-void ChatClient::handlerResendFileBlock::handle(const char *data, size_t) {
-	MessageResendFileBlock * mrfp = (MessageResendFileBlock*)data;
-
-	// SIMULATING PACKET LOOSING! (we won't send requested packet in 30% cases)
+void ChatClient::handlerResendFileBlock::handle(const char *data, size_t)
+{
+	MessageResendFileBlock* mrfp = (MessageResendFileBlock*)data;
 
 	if (SIMULATE_PACKET_LOOSING == 1)
 	{
-		srand(time(NULL));
+		srand((uint)time(NULL));
 		if ((rand() % 10 + 1) > 7)
 			return;
 	}
@@ -143,30 +146,30 @@ void ChatClient::handlerResendFileBlock::handle(const char *data, size_t) {
 	if (_chatClient->_filesSent.find(mrfp->id) == _chatClient->_filesSent.end())
 		return;
 
-	FilesSentContext * fsc = _chatClient->_filesSent[mrfp->id];
+	SentFilesContext * fsc = _chatClient->_filesSent[mrfp->id];
 	if (mrfp->block >= fsc->totalBlocks)
 		return;
 
 	// open file
 
-	std::ifstream input;
-	input.open(fsc->path.c_str(), std::ifstream::in | std::ios_base::binary);
+	ifstream input;
+	input.open(fsc->path.c_str(), ifstream::in | ios_base::binary);
 	if (!input.is_open())
 	{
 		_chatClient->printSysMessage(_chatClient->_recvEndpoint, "can't open file.");
 		return;
 	}
 
-	// read and send needen block
+	// read and send needed block
 
 	char raw[FILE_BLOCK_MAX];
 	input.seekg(mrfp->block * FILE_BLOCK_MAX);
 	input.read(raw, sizeof(raw));
 
-	_chatClient->sendTo(fsc->endpoint, MessageBuilder::fileBlock(mrfp->id, mrfp->block, raw, input.gcount()));
+	_chatClient->sendTo(fsc->endpoint, MessageBuilder::fileBlock(mrfp->id, mrfp->block, raw, (uint)input.gcount()));
 
 	input.close();
 
 	if (mrfp->block == 0)
-		fsc->firstPacketSent = true;
+		fsc->firstBlockSent = true;
 }

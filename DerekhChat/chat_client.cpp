@@ -6,12 +6,7 @@
 #include <fstream>
 #include <ctime>
 
-#include <boost/asio.hpp>
 #include <boost/bind.hpp>
-#include <boost/thread.hpp>
-#include <boost/array.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/filesystem.hpp>
 
 #include "chat_client.h"
 #include "message_formats.h"
@@ -27,8 +22,8 @@ static const short int ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send 
 ChatClient::ChatClient(int port)
 	: _sendSocket(_ioService)
 	, _recvSocket(_ioService)
-	, _sendEndpoint(boost::asio::ip::address_v4::broadcast(), port)
-	, _recvEndpoint(boost::asio::ip::address_v4::any(), port)
+	, _sendEndpoint(Ipv4Address::broadcast(), port)
+	, _recvEndpoint(Ipv4Address::any(), port)
 	, _threadsRunned(1)
 	, _port(port)
 	, _fileId(0)
@@ -45,12 +40,12 @@ ChatClient::ChatClient(int port)
 
 	// Socket for sending
 	_sendSocket.open(_sendEndpoint.protocol());
-	_sendSocket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+	_sendSocket.set_option(UdpSocket::reuse_address(true));
 	_sendSocket.set_option(boost::asio::socket_base::broadcast(true));
 
 	// Socket for receiving (including broadcast packets)
 	_recvSocket.open(_recvEndpoint.protocol());
-	_recvSocket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+	_recvSocket.set_option(UdpSocket::reuse_address(true));
 	_recvSocket.set_option(boost::asio::socket_base::broadcast(true));
 	_recvSocket.bind(_recvEndpoint);
 	_recvSocket.async_receive_from(
@@ -63,13 +58,13 @@ ChatClient::ChatClient(int port)
 	In this thread io_service is ran
 	We can't read users's input without it
 	*/
-	_serviceThread.reset(new boost::thread(boost::bind(&ChatClient::serviceThread, this)));
+	_serviceThread.reset(new Thread(boost::bind(&ChatClient::serviceThread, this)));
 
 	/*
 	This thread track all downloading files and send a re-send message
 	if time of received block less than sender pointed out
 	*/
-	_watcherThread.reset(new boost::thread(boost::bind(&ChatClient::serviceFilesWatcher, this)));
+	_watcherThread.reset(new Thread(boost::bind(&ChatClient::serviceFilesWatcher, this)));
 }
 
 ChatClient::~ChatClient()
@@ -90,10 +85,10 @@ ChatClient::~ChatClient()
 
 	// Delete all downloading and sending files
 
-	for (FilesMap::iterator it = _files.begin(); it != _files.end(); ++it)
+	for (UploadingFilesMap::iterator it = _files.begin(); it != _files.end(); ++it)
 		delete ((*it).second);
 
-	for (FilesSentMap::iterator it = _filesSent.begin(); it != _filesSent.end(); ++it)
+	for (SentFilesMap::iterator it = _filesSent.begin(); it != _filesSent.end(); ++it)
 		delete ((*it).second);
 
 	// Delete all handlers
@@ -106,7 +101,7 @@ ChatClient::~ChatClient()
 
 void ChatClient::serviceThread()
 {
-	boost::system::error_code ec;
+	ErrorCode ec;
 
 	while (_threadsRunned)
 	{
@@ -115,24 +110,24 @@ void ChatClient::serviceThread()
 	}
 
 	if (ec)
-		std::cout << ec.message();
+		cout << ec.message();
 }
 
 // Thread function
 
 void ChatClient::serviceFilesWatcher()
 {
-	std::stringstream ss;
+	stringstream ss;
 	while (_threadsRunned)
 	{
 		boost::this_thread::sleep(boost::posix_time::seconds(1));
 		{
-			boost::mutex::scoped_lock lk(_filesMutex);
+			ScopedLock lk(_filesMutex);
 			// files we receive
-			for (FilesMap::iterator it = _files.begin(); it != _files.end();)
+			for (UploadingFilesMap::iterator it = _files.begin(); it != _files.end();)
 			{
-				FileContext * fc = (*it).second;
-				if (fc == 0 || std::difftime(std::time(0), fc->ts) <= SECONDS_TO_LOOSE_PACKET)
+				UploadingFilesContext * fc = (*it).second;
+				if (fc == 0 || difftime(time(0), fc->ts) <= SECONDS_TO_LOOSE_PACKET)
 				{
 					++it;
 					continue;
@@ -147,7 +142,7 @@ void ChatClient::serviceFilesWatcher()
 					fc->fp.close();
 
 					// delete the file
-					boost::system::error_code ec;
+					ErrorCode ec;
 					boost::filesystem::path abs_path = boost::filesystem::complete(fc->name);
 					boost::filesystem::remove(abs_path, ec);
 
@@ -158,7 +153,7 @@ void ChatClient::serviceFilesWatcher()
 				// if we have attempts, try again
 				if (fc->blocksReceived > 0)
 				{
-					ss.str(std::string());
+					ss.str(string());
 
 					ss << "request dropped packet " << fc->blocksReceived << " from " << fc->blocks;
 					printSysMessage(fc->endpoint, ss.str());
@@ -170,10 +165,10 @@ void ChatClient::serviceFilesWatcher()
 			}
 			// files we send
 			// if FMWFI is not sent successfully, then, if we have attempts, send it again
-			for (FilesSentMap::iterator it = _filesSent.begin(); it != _filesSent.end();)
+			for (SentFilesMap::iterator it = _filesSent.begin(); it != _filesSent.end();)
 			{
-				FilesSentContext * fsc = (*it).second;
-				if (fsc == 0 || fsc->firstPacketSent || std::difftime(std::time(0), fsc->ts) <= SECONDS_TO_WAIT_ANSWER)
+				SentFilesContext * fsc = (*it).second;
+				if (fsc == 0 || fsc->firstBlockSent || difftime(time(0), fsc->ts) <= SECONDS_TO_WAIT_ANSWER)
 				{
 					++it;
 					continue;
@@ -200,7 +195,7 @@ void ChatClient::serviceFilesWatcher()
 }
 
 // async reading handler (udp socket)
-void ChatClient::handleReceiveFrom(const boost::system::error_code& err, size_t size)
+void ChatClient::handleReceiveFrom(const ErrorCode& err, size_t size)
 {
 	if (err) return;
 
@@ -208,7 +203,7 @@ void ChatClient::handleReceiveFrom(const boost::system::error_code& err, size_t 
 	MessageSys * pmsys = (MessageSys*)_data.data();
 	if (pmsys->code <= msgLast)
 	{
-		boost::mutex::scoped_lock lk(_filesMutex);
+		ScopedLock lk(_filesMutex);
 		(_handlers[pmsys->code])->handle(_data.data(), size);
 	}
 
@@ -221,9 +216,9 @@ void ChatClient::handleReceiveFrom(const boost::system::error_code& err, size_t 
 }
 
 // try to understand user's input
-void ChatClient::parseUserInput(const std::wstring& data)
+void ChatClient::parseUserInput(const wstring& data)
 {
-	std::wstring tmp(data);
+	wstring tmp(data);
 
 	// parse string
 	if (tmp.size() > 1)
@@ -233,16 +228,17 @@ void ChatClient::parseUserInput(const std::wstring& data)
 			// no asterisks (system message have them)
 			for (unsigned t = 0; t < tmp.size() && tmp[t] == L'*'; ++t);
 		}
-		else if (tmp.at(0) == L'@') {
+		else if (tmp.at(0) == L'@')
+        {
 			// Maybe, it is the private message (PM) such format:
 			// @ip message
-			std::string  ip;
-			std::wstring msg;
+			string  ip;
+			wstring msg;
 			tmp.erase(0, 1);
 			parseTwoStrings(tmp, ip, msg);
 			if (ip.empty() || msg.empty())
 			{
-				throw std::logic_error("invalid format.");
+				throw logic_error("invalid format.");
 			}
 			else {
 				sendMsg(parseEpFromString(ip), msg);
@@ -250,16 +246,17 @@ void ChatClient::parseUserInput(const std::wstring& data)
 			return;
 
 		}
-		else if (tmp.find(L"file ") == 0) {
+		else if (tmp.find(L"file ") == 0)
+        {
 			// Maybe, users wants to send the file:
 			// file ip path
 			tmp.erase(0, 5);
-			std::string  ip;
-			std::wstring path;
+			string  ip;
+			wstring path;
 			parseTwoStrings(tmp, ip, path);
 			if (ip.empty() || path.empty())
 			{
-				throw std::logic_error("invalid format.");
+				throw logic_error("invalid format.");
 			}
 			else {
 				sendFile(parseEpFromString(ip), path);
@@ -276,45 +273,40 @@ void ChatClient::parseUserInput(const std::wstring& data)
 
 // get endpoint from string
 
-boost::asio::ip::udp::endpoint ChatClient::parseEpFromString(const std::string & ip)
+UdpEndpoint ChatClient::parseEpFromString(const string& ip)
 {
-	boost::system::error_code err;
-	boost::asio::ip::address addr(boost::asio::ip::address::from_string(ip, err));
+	ErrorCode err;
+    IpAddress addr(IpAddress::from_string(ip, err));
 	if (err)
 	{
-		throw std::logic_error("can't parse this IP");
+		throw logic_error("can't parse this IP");
 	}
 	else {
-		return boost::asio::ip::udp::endpoint(addr, _port);
+		return UdpEndpoint(addr, _port);
 	}
 }
 
 // print system message
 
-void ChatClient::printSysMessage(
-	const boost::asio::ip::udp::endpoint & endpoint
-	, const std::string & msg)
+void ChatClient::printSysMessage(const UdpEndpoint& endpoint, const string& msg)
 {
-	std::cout << endpoint.address().to_string() << " > " << "*** " << msg << " ***" << std::endl;
+	cout << endpoint.address().to_string() << " > " << "*** " << msg << " ***" << endl;
 }
 
 // split a string into two strings by first space-symbol
 
-void ChatClient::parseTwoStrings(
-	const std::wstring & tmp
-	, std::string  & s1
-	, std::wstring & s2)
+void ChatClient::parseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
 {
 	s1.clear();
 	s2.clear();
 
 	// try to find first space-symbol
-	std::wstring::size_type t = tmp.find_first_of(L" \t");
+	wstring::size_type t = tmp.find_first_of(L" \t");
 
-	if (t == std::wstring::npos)
+	if (t == wstring::npos)
 		return;
 
-	s1 = std::string(tmp.begin(), tmp.begin() + t);
+	s1 = string(tmp.begin(), tmp.begin() + t);
 	s2 = tmp.substr(t + 1);
 }
 
@@ -325,13 +317,13 @@ int ChatClient::loop()
 	try
 	{
 		sendSysMsg(msgEnter);
-		for (std::wstring line;;)
+		for (wstring line;;)
 		{
-			std::getline(std::wcin, line);
+			getline(wcin, line);
 			// delete spaces to the right
 			if (line.empty() == false)
 			{
-				std::wstring::iterator p;
+				wstring::iterator p;
 				for (p = line.end() - 1; p != line.begin() && *p == L' '; --p);
 
 				if (*p != L' ')
@@ -350,14 +342,14 @@ int ChatClient::loop()
 				// parse string
 				parseUserInput(line);
 			}
-			catch (const std::logic_error & e) {
-				std::cout << "ERR: " << e.what() << std::endl;
+			catch (const logic_error& e) {
+				cout << "ERR: " << e.what() << endl;
 			}
 		}
 		sendSysMsg(msgQuit);
 	}
-	catch (const std::exception & e) {
-		std::cout << e.what() << std::endl;
+	catch (const exception& e) {
+		cout << e.what() << endl;
 	}
 
 	return 0;
@@ -367,34 +359,30 @@ int ChatClient::loop()
 
 void ChatClient::sendSysMsg(unsigned sysMsg)
 {
-	boost::mutex::scoped_lock lk(_filesMutex);
+	ScopedLock lk(_filesMutex);
 	sendTo(_sendEndpoint, MessageBuilder::system(sysMsg));
 }
 
 // text message
 
-void ChatClient::sendMsg(
-	const boost::asio::ip::udp::endpoint & endpoint
-	, const std::wstring & msg)
+void ChatClient::sendMsg(const UdpEndpoint& endpoint, const wstring& msg)
 {
-	boost::mutex::scoped_lock lk(_filesMutex);
+	ScopedLock lk(_filesMutex);
 	sendTo(endpoint, MessageBuilder::text(msg));
 }
 
 // send file message
 
-void ChatClient::sendFile(
-	const boost::asio::ip::udp::endpoint & endpoint
-	, const std::wstring & path)
+void ChatClient::sendFile(const UdpEndpoint& endpoint, const wstring& path)
 {
-	boost::mutex::scoped_lock lk(_filesMutex);
-	std::string fileName(path.begin(), path.end());
+	ScopedLock lk(_filesMutex);
+	string fileName(path.begin(), path.end());
 
-	std::ifstream input;
-	input.open(fileName.c_str(), std::ifstream::in | std::ios_base::binary);
+	ifstream input;
+	input.open(fileName.c_str(), ifstream::in | ios_base::binary);
 	if (!input.is_open())
 	{
-		std::cerr << "Error! Can't open file!" << std::endl;
+		cerr << "Error! Can't open file!" << endl;
 
 		input.close();
 
@@ -403,9 +391,9 @@ void ChatClient::sendFile(
 	input.close();
 
 	// add to sent-files map
-	FilesSentContext * fsc = new FilesSentContext;
+	SentFilesContext * fsc = new SentFilesContext;
 
-	fsc->firstPacketSent = false;
+	fsc->firstBlockSent = false;
 	fsc->totalBlocks = 0;
 	fsc->id = _fileId;
 	fsc->path = fileName;
@@ -421,19 +409,19 @@ void ChatClient::sendFile(
 
 // make and send block of file
 
-void ChatClient::sendFirstFileMsg(FilesSentContext * ctx)
+void ChatClient::sendFirstFileMsg(SentFilesContext * ctx)
 {
-	std::string fileName(ctx->path.begin(), ctx->path.end());
+	string fileName(ctx->path.begin(), ctx->path.end());
 
-	std::ifstream input;
-	input.open(fileName.c_str(), std::ifstream::in | std::ios_base::binary);
+	ifstream input;
+	input.open(fileName.c_str(), ifstream::in | ios_base::binary);
 	if (!input.is_open())
-		throw std::logic_error("Can't open file!");
+		throw logic_error("Can't open file!");
 
 	// count quantity of blocks
 	unsigned blocks = 0;
-	input.seekg(0, std::ifstream::end);
-	blocks = input.tellg() / FILE_BLOCK_MAX;
+	input.seekg(0, ifstream::end);
+	blocks = (uint)(input.tellg() / FILE_BLOCK_MAX);
 	if (input.tellg() % FILE_BLOCK_MAX)
 		blocks += 1;
 
@@ -442,29 +430,26 @@ void ChatClient::sendFirstFileMsg(FilesSentContext * ctx)
 
 	// cut path (send just name)
 
-	std::string::size_type t = fileName.find_last_of('\\');
-	if (t != std::string::npos) {
+	string::size_type t = fileName.find_last_of('\\');
+	if (t != string::npos)
 		fileName.erase(0, t + 1);
-	}
 
 	// make packet and send FMWFI
 
 	sendTo(ctx->endpoint, MessageBuilder::fileBegin(ctx->id, ctx->totalBlocks, fileName));
 
-	ctx->ts = std::time(0);
+	ctx->ts = time(0);
 }
 
 // make and send message with request of re-sending file block
 
-void ChatClient::sendResendMsg(FileContext * ctx)
+void ChatClient::sendResendMsg(UploadingFilesContext* ctx)
 {
 	sendTo(ctx->endpoint, MessageBuilder::resendFileBlock(
 		ctx->id, ctx->blocksReceived));
 }
 
-void ChatClient::sendTo(
-	const boost::asio::ip::udp::endpoint & e
-	, const std::string & m)
+void ChatClient::sendTo(const UdpEndpoint& e, const string& m)
 {
 	_sendSocket.send_to(boost::asio::buffer(m), e);
 }

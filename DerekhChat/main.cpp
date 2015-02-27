@@ -10,7 +10,7 @@ int main(int argc, char ** argv)
 			port = boost::lexical_cast<int>(argv[1]);
 		}
 		catch (const boost::bad_lexical_cast& err) {
-			std::cerr << err.what();
+			cerr << err.what();
 		}
 	}
 
@@ -19,8 +19,8 @@ int main(int argc, char ** argv)
 	try {
 		return chat.loop();
 	}
-	catch (std::logic_error& err) {
-		std::cerr << err.what() << std::endl;
+	catch (logic_error& err) {
+		cerr << err.what() << endl;
 		return 0;
 	}
 }

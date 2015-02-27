@@ -1,16 +1,16 @@
 #ifndef MESSAGE_BUILDER_H
 #define MESSAGE_BUILDER_H
 
-#include <string>
+#include "utils.h"
 
 class MessageBuilder
 {
 public:
-	static std::string system(unsigned char code);
-	static std::string text(const std::wstring& msg);
-	static std::string fileBegin(unsigned int id, unsigned int totalBlocks, const std::string& name);
-	static std::string fileBlock(unsigned int  id, unsigned int block, const char* data, unsigned int size);
-	static std::string resendFileBlock(unsigned int id, unsigned int block);
+	static string system(unsigned char code);
+	static string text(const wstring& msg);
+	static string fileBegin(uint id, uint totalBlocks, const string& name);
+	static string fileBlock(uint  id, uint block, const char* data, uint size);
+	static string resendFileBlock(uint id, uint block);
 };
 
 #endif // MESSAGE_BUILDER_H

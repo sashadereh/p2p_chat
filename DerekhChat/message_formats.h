@@ -1,6 +1,8 @@
 #ifndef MESSAGE_FORMATS_H
 #define MESSAGE_FORMATS_H
 
+#include "utils.h"
+
 enum MessageType
 {
 	msgEnter,
@@ -22,7 +24,7 @@ For example:
 	struct MyStruct
 	{
 		unsigned char code; // 1 byte
-		unsigned int length; // 4 bytes
+		uint length; // 4 bytes
 	};
 	Compiler can "insert" 3-nil bytes between code and length in order the size of length will be the multiple of a pow(2).
 */
@@ -40,36 +42,36 @@ struct MessageSys
 struct MessageText
 {
 	unsigned char code;
-	unsigned int  length;
+	uint length;
 	// "open array", we don't know about size of data. This field will have address in struct.
-	wchar_t       text[1];
+	wchar_t text[1];
 };
 
-#define SZ_MESSAGE_TEXT (SZ_MESSAGE_SYS + sizeof(unsigned int))
+#define SZ_MESSAGE_TEXT (SZ_MESSAGE_SYS + sizeof(uint))
 
 // File information message (First message, which file-sender send, when sending file)
 struct MessageFileBegin
 {
 	unsigned char code;
-	unsigned int  id;
-	unsigned int  totalBlocks;
-	unsigned int  nameLength;
-	char          name[1];
+	uint id;
+	uint totalBlocks;
+	uint nameLength;
+	char name[1];
 };
 
-#define SZ_MESSAGE_FILE_BEGIN (SZ_MESSAGE_SYS + 3 * sizeof(unsigned int))
+#define SZ_MESSAGE_FILE_BEGIN (SZ_MESSAGE_SYS + 3 * sizeof(uint))
 
 // File block message
 struct MessageFileBlock
 {
 	unsigned char code;
-	unsigned int  id;
-	unsigned int  block;
-	unsigned int  size;
-	char          data[1];
+	uint id;
+	uint block;
+	uint size;
+	char data[1];
 };
 
-#define SZ_MESSAGE_FILE_BLOCK (SZ_MESSAGE_SYS + 3 * sizeof(unsigned int))
+#define SZ_MESSAGE_FILE_BLOCK (SZ_MESSAGE_SYS + 3 * sizeof(uint))
 
 #define FILE_BLOCK_MAX (6 * 1024)
 
@@ -77,11 +79,11 @@ struct MessageFileBlock
 struct MessageResendFileBlock
 {
 	unsigned char code;
-	unsigned int  id;
-	unsigned int  block;
+	uint id;
+	uint block;
 };
 
-#define SZ_MESSAGE_RESEND_FILE_BLOCK (SZ_MESSAGE_SYS + 2 * sizeof(unsigned int))
+#define SZ_MESSAGE_RESEND_FILE_BLOCK (SZ_MESSAGE_SYS + 2 * sizeof(uint))
 
 #pragma pack(pop)
 

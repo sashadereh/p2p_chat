@@ -3,15 +3,23 @@
 
 #include "utils.h"
 
+#include <mutex>
+
 class ChatClient
 {
 public:
-	ChatClient(int port);
-	~ChatClient();
+	virtual ~ChatClient();
+    static ChatClient& GetInstance();
 
 	int loop();
 
 private:
+    // singleton class
+    static unique_ptr<ChatClient> _instance;
+    static once_flag _onceFlag;
+    ChatClient();
+    ChatClient(const ChatClient& src);
+    ChatClient& operator=(const ChatClient& rval);
 
 	// downloading files
 	struct UploadingFilesContext

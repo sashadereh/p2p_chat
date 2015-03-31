@@ -12,6 +12,9 @@
 #include "message_formats.h"
 #include "message_builder.h"
 
+unique_ptr<ChatClient> ChatClient::_instance;
+once_flag ChatClient::_onceFlag;
+
 // Constants for FilesWatcherThread
 
 static const short int SECONDS_TO_LOOSE_PACKET = 1; // seconds. Incoming packet is lost after this time (we decide).
@@ -19,13 +22,12 @@ static const short int ATTEMPTS_TO_RECEIVE_BLOCK = 5; // attempts. Download is i
 static const short int SECONDS_TO_WAIT_ANSWER = 5; // seconds. First message with file information (FMWFI) is re-sent after this time.
 static const short int ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send FMWFI after reaching this limit.
 
-ChatClient::ChatClient(int port)
-	: _sendSocket(_ioService)
+ChatClient::ChatClient() : _sendSocket(_ioService)
 	, _recvSocket(_ioService)
-	, _sendEndpoint(Ipv4Address::broadcast(), port)
-	, _recvEndpoint(Ipv4Address::any(), port)
+	, _sendEndpoint(Ipv4Address::broadcast(), PORT)
+	, _recvEndpoint(Ipv4Address::any(), PORT)
 	, _threadsRunned(1)
-	, _port(port)
+	, _port(PORT)
 	, _fileId(0)
 {
 	// Create handlers
@@ -95,6 +97,15 @@ ChatClient::~ChatClient()
 
 	for (Handlers::iterator it = _handlers.begin(); it != _handlers.end(); ++it)
 		delete (*it);
+}
+
+ChatClient& ChatClient::GetInstance()
+{
+    call_once(_onceFlag, [] {
+        _instance.reset(new ChatClient);
+    }
+    );    
+    return *_instance.get();
 }
 
 // Thread function

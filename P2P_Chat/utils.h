@@ -32,4 +32,6 @@ typedef boost::system::error_code ErrorCode;
 
 typedef unsigned int uint;
 
+static uint PORT = 54321;
+
 #endif // UTILS_H

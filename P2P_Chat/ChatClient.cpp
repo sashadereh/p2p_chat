@@ -8,9 +8,9 @@
 
 #include <boost/bind.hpp>
 
-#include "chat_client.h"
+#include "ChatClient.h"
 #include "message_formats.h"
-#include "message_builder.h"
+#include "MessageBuilder.h"
 
 unique_ptr<ChatClient> ChatClient::_instance;
 once_flag ChatClient::_onceFlag;

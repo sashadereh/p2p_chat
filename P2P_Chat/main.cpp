@@ -1,4 +1,4 @@
-#include "chat_client.h"
+#include "ChatClient.h"
 #include <boost/lexical_cast.hpp>
 
 int main(int argc, char ** argv)

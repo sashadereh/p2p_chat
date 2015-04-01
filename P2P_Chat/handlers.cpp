@@ -1,5 +1,5 @@
-#include "chat_client.h"
-#include "message_builder.h"
+#include "ChatClient.h"
+#include "MessageBuilder.h"
 #include "message_formats.h"
 #include "utils.h"
 

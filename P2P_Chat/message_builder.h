@@ -6,11 +6,11 @@
 class MessageBuilder
 {
 public:
-	static string system(unsigned char code);
-	static string text(const wstring& msg);
-	static string fileBegin(uint id, uint totalBlocks, const string& name);
-	static string fileBlock(uint  id, uint block, const char* data, uint size);
-	static string resendFileBlock(uint id, uint block);
+    static string system(unsigned char code);
+    static string text(const wstring& msg);
+    static string fileBegin(uint id, uint totalBlocks, const string& name);
+    static string fileBlock(uint  id, uint block, const char* data, uint size);
+    static string resendFileBlock(uint id, uint block);
 };
 
 #endif // MESSAGE_BUILDER_H

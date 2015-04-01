@@ -3,27 +3,27 @@
 
 int main(int argc, char ** argv)
 {
-	if (argc > 1)
+    if (argc > 1)
     {
-		try
+        try
         {
-			PORT = boost::lexical_cast<int>(argv[1]);
-		}
-		catch (const boost::bad_lexical_cast& err)
+            PORT = boost::lexical_cast<int>(argv[1]);
+        }
+        catch (const boost::bad_lexical_cast& err)
         {
-			cerr << err.what();
-		}
-	}
+            cerr << err.what();
+        }
+    }
 
-	ChatClient* chatInstance = &ChatClient::GetInstance();
+    ChatClient* chatInstance = &ChatClient::GetInstance();
 
-	try
+    try
     {
-		return chatInstance->loop();
-	}
-	catch (logic_error& err)
+        return chatInstance->loop();
+    }
+    catch (logic_error& err)
     {
-		cerr << err.what() << endl;
-		return 0;
-	}
+        cerr << err.what() << endl;
+        return 0;
+    }
 }

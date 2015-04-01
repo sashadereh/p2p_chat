@@ -131,16 +131,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="chat_client.h" />
-    <ClInclude Include="message_builder.h" />
+    <ClInclude Include="ChatClient.h" />
+    <ClInclude Include="Logger.h" />
+    <ClInclude Include="MessageBuilder.h" />
     <ClInclude Include="message_formats.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="chat_client.cpp" />
+    <ClCompile Include="ChatClient.cpp" />
     <ClCompile Include="handlers.cpp" />
+    <ClCompile Include="Logger.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="message_builder.cpp" />
+    <ClCompile Include="MessageBuilder.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

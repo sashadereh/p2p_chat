@@ -8,6 +8,8 @@
 #include <vector>
 #include <fstream>
 #include <ctime>
+#include <fstream>
+#include <thread>
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
@@ -30,8 +32,14 @@ typedef boost::mutex::scoped_lock ScopedLock;
 
 typedef boost::system::error_code ErrorCode;
 
+typedef ofstream OutFile;
+typedef ifstream InFile;
+
+typedef const char* c_string;
+
 typedef unsigned int uint;
 
 static uint PORT = 54321;
+static bool DoShutdown = false;
 
 #endif // UTILS_H

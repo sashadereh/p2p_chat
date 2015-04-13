@@ -11,6 +11,7 @@
 #include "ChatClient.h"
 #include "message_formats.h"
 #include "MessageBuilder.h"
+#include "Logger.h"
 
 unique_ptr<ChatClient> ChatClient::_instance;
 once_flag ChatClient::_onceFlag;
@@ -26,7 +27,7 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
     , _sendEndpoint(Ipv4Address::broadcast(), PORT)
     , _recvEndpoint(Ipv4Address::any(), PORT)
-    , _threadsRunned(1)
+    , _threadsRunned(2)
     , _port(PORT)
     , _fileId(0)
 {
@@ -67,17 +68,28 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     if time of received block less than sender pointed out
     */
     _watcherThread.reset(new Thread(boost::bind(&ChatClient::serviceFilesWatcher, this)));
+
+    /*
+    This thread pop all messages from the log queue and writes them
+    to the log file
+    */
+    _loggerThread.reset(new Thread(boost::bind(&Logger::MessageQueueHandler, Logger::GetInstance().GetLogger())));
+    //_loggerThread.reset(new Thread(boost::bind(&Logger::MessageQueueHandler, &Logger::GetInstance())));
 }
 
 ChatClient::~ChatClient()
 {
     _threadsRunned = 0;
+    DoShutdown = true;
 
     _recvSocket.close();
     _sendSocket.close();
     _ioService.stop();
 
     // Wait for the completion of the threads
+
+    if (_loggerThread.get())
+        _loggerThread->join();
 
     if (_watcherThread.get())
         _watcherThread->join();

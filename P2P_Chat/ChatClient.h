@@ -99,6 +99,7 @@ private:
     boost::array<char, 64 * 1024> _data;
     auto_ptr<Thread> _serviceThread;
     auto_ptr<Thread> _watcherThread;
+    auto_ptr<Thread> _loggerThread;
     volatile int _threadsRunned;
     int _port;
     uint _fileId;

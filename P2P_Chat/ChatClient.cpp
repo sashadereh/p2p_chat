@@ -27,10 +27,11 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
     , _sendEndpoint(Ipv4Address::broadcast(), PORT)
     , _recvEndpoint(Ipv4Address::any(), PORT)
-    , _threadsRunned(2)
+    , _runThreads(1)
     , _port(PORT)
     , _fileId(0)
 {
+    Logger::GetInstance()->Trace("Starting program...");
     // Create handlers
     Handler::setChatInstance(this);
     _handlers.resize(msgLast + 1);
@@ -68,18 +69,11 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     if time of received block less than sender pointed out
     */
     _watcherThread.reset(new Thread(boost::bind(&ChatClient::serviceFilesWatcher, this)));
-
-    /*
-    This thread pop all messages from the log queue and writes them
-    to the log file
-    */
-    _loggerThread.reset(new Thread(boost::bind(&Logger::MessageQueueHandler, Logger::GetInstance().GetLogger())));
-    //_loggerThread.reset(new Thread(boost::bind(&Logger::MessageQueueHandler, &Logger::GetInstance())));
 }
 
 ChatClient::~ChatClient()
 {
-    _threadsRunned = 0;
+    _runThreads = 0;
     DoShutdown = true;
 
     _recvSocket.close();
@@ -88,8 +82,8 @@ ChatClient::~ChatClient()
 
     // Wait for the completion of the threads
 
-    if (_loggerThread.get())
-        _loggerThread->join();
+    if (LoggerThread.get())
+        LoggerThread->join();
 
     if (_watcherThread.get())
         _watcherThread->join();
@@ -126,7 +120,7 @@ void ChatClient::serviceThread()
 {
     ErrorCode ec;
 
-    while (_threadsRunned)
+    while (_runThreads)
     {
         _ioService.run(ec);
         _ioService.reset();
@@ -141,7 +135,7 @@ void ChatClient::serviceThread()
 void ChatClient::serviceFilesWatcher()
 {
     stringstream ss;
-    while (_threadsRunned)
+    while (_runThreads)
     {
         boost::this_thread::sleep(boost::posix_time::seconds(1));
         {

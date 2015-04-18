@@ -100,7 +100,7 @@ private:
     auto_ptr<Thread> _serviceThread;
     auto_ptr<Thread> _watcherThread;
     auto_ptr<Thread> _loggerThread;
-    volatile int _threadsRunned;
+    volatile int _runThreads;
     int _port;
     uint _fileId;
     UploadingFilesMap _files;

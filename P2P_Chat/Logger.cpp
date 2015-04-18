@@ -5,20 +5,33 @@ once_flag Logger::_onceFlag;
 
 Logger::Logger() : _timePosted(false)
 {
-    cout << "In Logger ctor" << endl;
     _logFile.open(LOGFILE_PATH, ios_base::app);
     if (!_logFile.is_open())
         exit(1);
+    _loggerMutex.initialize();
     Enable();
-    _addToQueueMutex.initialize();
 }
 
 
 Logger::~Logger()
 {
-    cout << "In Logger dtor" << endl;
+    Disable();
     _logFile.close();
-    _addToQueueMutex.destroy();
+    _loggerMutex.destroy();
+}
+
+void Logger::Enable()
+{
+    _enable = true;
+    LoggerThread.reset(new Thread(boost::bind(&Logger::MessageQueueHandler, this)));
+}
+
+void Logger::Disable()
+{
+    _enable = false;
+    if (LoggerThread.get())
+        LoggerThread->join();
+    LoggerThread.reset();
 }
 
 
@@ -28,7 +41,10 @@ SmartLoggerPtr Logger::GetInstance()
         _instance.reset(new Logger);
     }
     );
-    return SmartLoggerPtr(*_instance.get());
+    if (_instance.get())
+        return SmartLoggerPtr(*_instance.get());
+    else
+        throw logic_error("Logger singleton was deleted!");
 }
 
 
@@ -48,13 +64,17 @@ void Logger::InsertTimeInString(stringstream& strStream)
 
 void Logger::MessageQueueHandler()
 {
-    boost::this_thread::sleep(boost::posix_time::seconds(2));
-    while (!DoShutdown)
+    while (!DoShutdown && _enable)
     {
-        while (!_messageQueue.empty())
+        boost::this_thread::sleep(boost::posix_time::seconds(1));
         {
-            cout << _messageQueue.front();
-            _messageQueue.pop();
+            ScopedLock lk(_loggerMutex);
+            while (!_messageQueue.empty())
+            {
+                _logFile << _messageQueue.front();
+                _messageQueue.pop();
+            }
         }
     }
+
 }

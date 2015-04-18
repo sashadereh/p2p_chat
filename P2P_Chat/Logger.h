@@ -14,11 +14,10 @@ class Logger
 public:
     virtual ~Logger();
     static SmartLoggerPtr GetInstance();
-    void Enable() { _enable = true; }
-    void Disable() { _enable = false; }
+    void Enable();
+    void Disable();
     template <typename T> void Trace(const T& t);
     template <typename First, typename... Rest> void Trace(const First& first, const Rest&... rest);
-    void MessageQueueHandler();
     queue<string>& GetQueue() { return _messageQueue; }
     friend SmartLoggerPtr;
 private:
@@ -26,7 +25,7 @@ private:
     static unique_ptr<Logger> _instance;
     static once_flag _onceFlag;
 
-    Mutex _addToQueueMutex;
+    Mutex _loggerMutex;
     OutFile _logFile;
     stringstream _stringToInsert;
     queue<string> _messageQueue;
@@ -39,6 +38,7 @@ private:
 
     void InsertStringInFile(stringstream& strStream);
     void InsertTimeInString(stringstream& strStream);
+    void MessageQueueHandler();
 };
 
 template <typename T>
@@ -76,32 +76,25 @@ void Logger::Trace(const First& first, const Rest&... rest)
     Trace(rest...);
 }
 
+
 class SmartLoggerPtr
 {
 public:
     SmartLoggerPtr(Logger& instance)
     {
-        cout << "In SLP ctor" << endl;
         _logger = &instance;
-        _logger->_addToQueueMutex.lock();
+        _logger->_loggerMutex.lock();
     }
 
     ~SmartLoggerPtr()
     {
-        cout << "In SLP dtor" << endl;
-        _logger->_addToQueueMutex.unlock();
+        _logger->_loggerMutex.unlock();
     }
 
     Logger* operator ->()
     {
         return _logger;
     }
-
-    Logger* GetLogger()
-    {
-        return _logger;
-    }
-
 private:
     Logger* _logger;
 };

@@ -11,6 +11,7 @@
 #include "ChatClient.h"
 #include "message_formats.h"
 #include "MessageBuilder.h"
+#include "Logger.h"
 
 unique_ptr<ChatClient> ChatClient::_instance;
 once_flag ChatClient::_onceFlag;
@@ -26,10 +27,11 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
     , _sendEndpoint(Ipv4Address::broadcast(), PORT)
     , _recvEndpoint(Ipv4Address::any(), PORT)
-    , _threadsRunned(1)
+    , _runThreads(1)
     , _port(PORT)
     , _fileId(0)
 {
+    Logger::GetInstance()->Trace("Starting program...");
     // Create handlers
     Handler::setChatInstance(this);
     _handlers.resize(msgLast + 1);
@@ -71,13 +73,17 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
 
 ChatClient::~ChatClient()
 {
-    _threadsRunned = 0;
+    _runThreads = 0;
+    DoShutdown = true;
 
     _recvSocket.close();
     _sendSocket.close();
     _ioService.stop();
 
     // Wait for the completion of the threads
+
+    if (LoggerThread.get())
+        LoggerThread->join();
 
     if (_watcherThread.get())
         _watcherThread->join();
@@ -114,7 +120,7 @@ void ChatClient::serviceThread()
 {
     ErrorCode ec;
 
-    while (_threadsRunned)
+    while (_runThreads)
     {
         _ioService.run(ec);
         _ioService.reset();
@@ -129,7 +135,7 @@ void ChatClient::serviceThread()
 void ChatClient::serviceFilesWatcher()
 {
     stringstream ss;
-    while (_threadsRunned)
+    while (_runThreads)
     {
         boost::this_thread::sleep(boost::posix_time::seconds(1));
         {

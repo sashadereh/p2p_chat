@@ -1,4 +1,5 @@
 #include "ChatClient.h"
+#include "Logger.h"
 #include <boost/lexical_cast.hpp>
 
 int main(int argc, char ** argv)
@@ -26,4 +27,5 @@ int main(int argc, char ** argv)
         cerr << err.what() << endl;
         return 0;
     }
+    return 0;
 }

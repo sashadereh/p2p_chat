@@ -41,10 +41,7 @@ SmartLoggerPtr Logger::GetInstance()
         _instance.reset(new Logger);
     }
     );
-    if (_instance.get())
-        return SmartLoggerPtr(*_instance.get());
-    else
-        throw logic_error("Logger singleton was deleted!");
+    return SmartLoggerPtr(*_instance.get());
 }
 
 

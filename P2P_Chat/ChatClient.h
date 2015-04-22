@@ -97,9 +97,6 @@ private:
     UdpEndpoint _sendEndpoint;
     UdpEndpoint _recvEndpoint;
     boost::array<char, 64 * 1024> _data;
-    auto_ptr<Thread> _serviceThread;
-    auto_ptr<Thread> _watcherThread;
-    auto_ptr<Thread> _loggerThread;
     volatile int _runThreads;
     int _port;
     uint _fileId;
@@ -110,8 +107,8 @@ private:
 
     // async
 
-    void serviceThread();
-    void serviceFilesWatcher();
+    void ServiceThread();
+    void ServiceFilesWatcher();
     void handleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
 
     // parsing

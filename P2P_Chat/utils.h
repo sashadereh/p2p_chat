@@ -19,6 +19,10 @@
 
 #define SIMULATE_PACKET_LOOSING 0
 
+#define LOG_THREAD "LoggerThread"
+#define SERVICE_THREAD "ServiceThread"
+#define FILESWATCHER_THREAD "FilesThread"
+
 using namespace std;
 
 typedef boost::asio::ip::udp::socket UdpSocket;
@@ -35,16 +39,14 @@ typedef boost::system::error_code ErrorCode;
 typedef ofstream OutFile;
 typedef ifstream InFile;
 
-typedef const char* c_string;
+typedef char* c_string;
+typedef const char* cc_string;
 
 typedef unsigned int uint;
 
+// Global variables
 static uint PORT = 54321;
 static bool DoShutdown = false;
-/*
-This thread pop all messages from the log queue and writes them
-to the log file
-*/
-static auto_ptr<Thread> LoggerThread;
+static map<cc_string, auto_ptr<Thread>> ThreadsMap;
 
 #endif // UTILS_H

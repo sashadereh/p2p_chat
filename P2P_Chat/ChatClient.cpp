@@ -31,7 +31,7 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     , _port(PORT)
     , _fileId(0)
 {
-    Logger::GetInstance()->Trace("Starting program...");
+    Logger::GetInstance()->Trace("Chat client started");
     // Create handlers
     Handler::setChatInstance(this);
     _handlers.resize(msgLast + 1);
@@ -62,13 +62,14 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     In this thread io_service is ran
     We can't read user's input without it
     */
-    _serviceThread.reset(new Thread(boost::bind(&ChatClient::serviceThread, this)));
-
+    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(SERVICE_THREAD, auto_ptr<Thread>()));
+    ThreadsMap[SERVICE_THREAD].reset(new Thread(boost::bind(&ChatClient::ServiceThread, this)));
     /*
     This thread track all downloading files and send a re-send message
     if time of received block less than sender pointed out
     */
-    _watcherThread.reset(new Thread(boost::bind(&ChatClient::serviceFilesWatcher, this)));
+    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD, auto_ptr<Thread>()));
+    ThreadsMap[FILESWATCHER_THREAD].reset(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)));
 }
 
 ChatClient::~ChatClient()
@@ -82,14 +83,16 @@ ChatClient::~ChatClient()
 
     // Wait for the completion of the threads
 
-    if (LoggerThread.get())
-        LoggerThread->join();
+    if (ThreadsMap[LOG_THREAD].get())
+        ThreadsMap[LOG_THREAD]->join();
 
-    if (_watcherThread.get())
-        _watcherThread->join();
+    if (ThreadsMap[FILESWATCHER_THREAD].get())
+        ThreadsMap[FILESWATCHER_THREAD]->join();
 
-    if (_serviceThread.get())
-        _serviceThread->join();
+    if (ThreadsMap[SERVICE_THREAD].get())
+        ThreadsMap[SERVICE_THREAD]->join();
+    
+    ThreadsMap.clear();
 
     // Delete all downloading and sending files
 
@@ -116,7 +119,7 @@ ChatClient& ChatClient::GetInstance()
 
 // Thread function
 
-void ChatClient::serviceThread()
+void ChatClient::ServiceThread()
 {
     ErrorCode ec;
 
@@ -132,7 +135,7 @@ void ChatClient::serviceThread()
 
 // Thread function
 
-void ChatClient::serviceFilesWatcher()
+void ChatClient::ServiceFilesWatcher()
 {
     stringstream ss;
     while (_runThreads)

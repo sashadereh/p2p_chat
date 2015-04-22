@@ -16,6 +16,7 @@ public:
     static SmartLoggerPtr GetInstance();
     void Enable();
     void Disable();
+    bool IsEnable() { return _enable; }
     template <typename T> void Trace(const T& t);
     template <typename First, typename... Rest> void Trace(const First& first, const Rest&... rest);
     queue<string>& GetQueue() { return _messageQueue; }

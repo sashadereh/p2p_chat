@@ -23,15 +23,19 @@ Logger::~Logger()
 void Logger::Enable()
 {
     _enable = true;
-    LoggerThread.reset(new Thread(boost::bind(&Logger::MessageQueueHandler, this)));
+    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(LOG_THREAD, auto_ptr<Thread>()));
+    ThreadsMap[LOG_THREAD].reset(new Thread(boost::bind(&Logger::MessageQueueHandler, this)));
 }
 
 void Logger::Disable()
 {
     _enable = false;
-    if (LoggerThread.get())
-        LoggerThread->join();
-    LoggerThread.reset();
+
+    if (ThreadsMap[LOG_THREAD].get())
+        ThreadsMap[LOG_THREAD]->join();
+
+    ThreadsMap[LOG_THREAD].reset();
+    ThreadsMap.erase(LOG_THREAD);
 }
 
 

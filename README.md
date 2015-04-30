@@ -9,7 +9,15 @@ It uses boost library and only UDP as a transport protocol.
 
 3. Send files to the peer. Packets with blocks of the file, that are lost due to UDP are re-downloaded.
 
-4. TODO
+#How to build:
+###Windows:
+
+You should have compiled Boost libraries(Asio, Array, Thread, Filesystem) and have environment variables:
+```
+BOOST_ROOT - root directory of Boost libraries
+
+BOOST_LIB - directory with compiled Boost libraries (usually it points to $(BOOST_ROOT)\stage\lib)
+```
 
 #Usage:
 

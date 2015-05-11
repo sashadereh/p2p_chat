@@ -1,15 +1,17 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdio.h>
 #include <string>
+#include <sstream>
 #include <cstring>
+#include <cstdint>
+#include <ctime>
 #include <memory>
 #include <map>
 #include <vector>
+#include <iostream>
 #include <fstream>
-#include <ctime>
-#include <fstream>
-#include <thread>
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
@@ -22,6 +24,8 @@
 #define LOG_THREAD "LoggerThread"
 #define SERVICE_THREAD "ServiceThread"
 #define FILESWATCHER_THREAD "FilesThread"
+
+#define PEER_ID_MAX_SIZE 20
 
 using namespace std;
 

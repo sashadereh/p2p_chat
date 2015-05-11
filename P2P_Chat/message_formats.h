@@ -38,6 +38,16 @@ struct MessageSys
 
 #define SZ_MESSAGE_SYS (sizeof(unsigned char))
 
+struct MessagePeerData
+{
+    unsigned char _code;
+    uint _nicknameLen;
+    wchar_t _nickname[1];
+    char _id[PEER_ID_MAX_SIZE];
+};
+
+#define SZ_MESSAGE_PEERDARA (sizeof(SZ_MESSAGE_SYS) + sizeof(uint) + sizeof(_id))
+
 // Text message
 struct MessageText
 {

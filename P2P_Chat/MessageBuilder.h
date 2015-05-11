@@ -7,6 +7,7 @@ class MessageBuilder
 {
 public:
     static string system(unsigned char code);
+    static string PeerData(const wstring& nick, const char* id);
     static string text(const wstring& msg);
     static string fileBegin(uint id, uint totalBlocks, const string& name);
     static string fileBlock(uint  id, uint block, const char* data, uint size);

@@ -13,6 +13,23 @@ string MessageBuilder::system(unsigned char code)
     return raw;
 }
 
+std::string MessageBuilder::PeerData(const wstring& nick, const string& id)
+{
+    string raw;
+    int rawLen = nick.length() * sizeof(wchar_t);
+    raw.resize(rawLen + SZ_MESSAGE_PEERDATA, 0);
+
+    MessagePeerData* messPeerData = (MessagePeerData*)raw.data();
+
+    messPeerData->_code = M_PEER_DATA;
+    memcpy(messPeerData->_id, id.c_str(), PEER_ID_SIZE + 1);
+    messPeerData->_nicknameLength = nick.length();
+    memcpy(messPeerData->_nickname, nick.data(), rawLen);
+
+
+    return raw;
+}
+
 string MessageBuilder::text(const wstring& msg)
 {
     string raw;
@@ -21,7 +38,7 @@ string MessageBuilder::text(const wstring& msg)
 
     MessageText* pmt = (MessageText*)raw.data();
 
-    pmt->code = msgText;
+    pmt->code = M_TEXT;
     pmt->length = msg.length();
     memcpy(pmt->text, msg.data(), rawLen);
 
@@ -35,7 +52,7 @@ string MessageBuilder::fileBegin(uint id, uint totalBlocks, const string& fileNa
     raw.resize(rawLen + SZ_MESSAGE_FILE_BEGIN, 0);
 
     MessageFileBegin* pfb = (MessageFileBegin*)raw.data();
-    pfb->code = msgFileBegin;
+    pfb->code = M_FILE_BEGIN;
     pfb->id = id;
     pfb->totalBlocks = totalBlocks;
     pfb->nameLength = fileName.length();
@@ -50,7 +67,7 @@ string MessageBuilder::fileBlock(uint id, uint block, const char* data, uint siz
     raw.resize(FILE_BLOCK_MAX + size, 0);
     MessageFileBlock* pfp = (MessageFileBlock*)raw.data();
 
-    pfp->code = msgFileBlock;
+    pfp->code = M_FILE_BLOCK;
     pfp->id = id;
     pfp->block = block;
     pfp->size = size;
@@ -65,7 +82,7 @@ string MessageBuilder::resendFileBlock(uint id, uint block)
     raw.resize(SZ_MESSAGE_RESEND_FILE_BLOCK, 0);
     MessageResendFileBlock* ms = (MessageResendFileBlock*)raw.data();
 
-    ms->code = msgResendFileBlock;
+    ms->code = M_RESEND_FILE_BLOCK;
     ms->id = id;
     ms->block = block;
 

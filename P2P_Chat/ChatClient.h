@@ -2,6 +2,7 @@
 #define CHAT_CLIENT_H
 
 #include "utils.h"
+#include "Peer.h"
 
 #include <mutex>
 
@@ -76,6 +77,11 @@ private:
         void handle(const char* data, size_t size);
     };
 
+    class HandlerPeerData : public Handler {
+    public:
+        void handle(const char* data, size_t size);
+    };
+
     class handlerFileBegin : public Handler {
     public:
         void handle(const char* data, size_t size);
@@ -104,6 +110,7 @@ private:
     SentFilesMap _filesSent;
     Mutex _filesMutex;
     Handlers _handlers;
+    Peer _thisPeer;
 
     // async
 
@@ -121,6 +128,7 @@ private:
     // senders
 
     void sendSysMsg(unsigned sysMsg);
+    void SendPeerDataMsg();
     void sendMsg(const UdpEndpoint& endpoint, const wstring& message);
     void sendFile(const UdpEndpoint& endpoint, const wstring& path);
     void sendTo(const UdpEndpoint& endpoint, const string& m);

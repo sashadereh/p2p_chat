@@ -29,13 +29,14 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     Logger::GetInstance()->Trace("Chat client started");
     // Create handlers
     Handler::setChatInstance(this);
-    _handlers.resize(msgLast + 1);
-    _handlers[msgEnter] = new handlerEnter;
-    _handlers[msgQuit] = new handlerQuit;
-    _handlers[msgText] = new handlerText;
-    _handlers[msgFileBegin] = new handlerFileBegin;
-    _handlers[msgFileBlock] = new handlerFileBlock;
-    _handlers[msgResendFileBlock] = new handlerResendFileBlock;
+    _handlers.resize(LAST + 1);
+    _handlers[M_ENTER] = new handlerEnter;
+    _handlers[M_QUIT] = new handlerQuit;
+    _handlers[M_TEXT] = new handlerText;
+    _handlers[M_FILE_BEGIN] = new handlerFileBegin;
+    _handlers[M_FILE_BLOCK] = new handlerFileBlock;
+    _handlers[M_RESEND_FILE_BLOCK] = new handlerResendFileBlock;
+    _handlers[M_PEER_DATA] = new HandlerPeerData;
 
     // Socket for sending
     _sendSocket.open(_sendEndpoint.protocol());
@@ -52,6 +53,10 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
         boost::bind(&ChatClient::handleReceiveFrom, this,
         boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
+
+    _thisPeer.SetNickname(L"Sasha Derekh");
+    wcout << _thisPeer.GetNickname();
+    cout << _thisPeer.GetId();
 
     /*
     In this thread io_service is ran
@@ -216,7 +221,7 @@ void ChatClient::handleReceiveFrom(const ErrorCode& err, size_t size)
 
     // parse received packet
     MessageSys * pmsys = (MessageSys*)_data.data();
-    if (pmsys->code <= msgLast)
+    if (pmsys->code <= LAST)
     {
         ScopedLock lk(_filesMutex);
         (_handlers[pmsys->code])->handle(_data.data(), size);
@@ -325,13 +330,14 @@ void ChatClient::parseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
     s2 = tmp.substr(t + 1);
 }
 
-// read user's input
+// Main loop of application
 
 int ChatClient::loop()
 {
     try
     {
-        sendSysMsg(msgEnter);
+        sendSysMsg(M_ENTER);
+        SendPeerDataMsg();
         for (wstring line;;)
         {
             getline(wcin, line);
@@ -361,7 +367,7 @@ int ChatClient::loop()
                 cout << "ERR: " << e.what() << endl;
             }
         }
-        sendSysMsg(msgQuit);
+        sendSysMsg(M_QUIT);
     }
     catch (const exception& e) {
         cout << e.what() << endl;
@@ -376,6 +382,12 @@ void ChatClient::sendSysMsg(unsigned sysMsg)
 {
     ScopedLock lk(_filesMutex);
     sendTo(_sendEndpoint, MessageBuilder::system(sysMsg));
+}
+
+void ChatClient::SendPeerDataMsg()
+{
+    ScopedLock lk(_filesMutex);
+    sendTo(_sendEndpoint, MessageBuilder::PeerData(_thisPeer.GetNickname(), _thisPeer.GetId()));
 }
 
 // text message

@@ -1,6 +1,7 @@
 #include "ChatClient.h"
 #include "MessageBuilder.h"
 #include "message_formats.h"
+#include "Logger.h"
 #include "utils.h"
 
 ChatClient* ChatClient::Handler::_chatClient = 0;
@@ -22,6 +23,13 @@ void ChatClient::handlerText::handle(const char* data, size_t)
     cout << _chatClient->_recvEndpoint.address().to_string() << " > ";
     wcout.write(mt->text, mt->length);
     cout << endl;
+}
+
+void ChatClient::HandlerPeerData::handle(const char* data, size_t size)
+{
+    // Add here to Peers map, which we should create
+    MessagePeerData* mpd = (MessagePeerData*)data;
+    Logger::GetInstance()->Trace("Peer Identity received: nick = ", wstring(mpd->_nickname), " id = ", mpd->_id);
 }
 
 void ChatClient::handlerFileBegin::handle(const char* data, size_t)

@@ -3,7 +3,7 @@
 Peer::Peer(const wstring& nick)
 {
     SetNickname(nick);
-    srand(time(0));
+    GenerateId();
 }
 
 void Peer::SetNickname(const wstring& nick)
@@ -14,13 +14,15 @@ void Peer::SetNickname(const wstring& nick)
         _nickname = nick;
 }
 
-void Peer::SetId()
+void Peer::GenerateId()
 {
     const char extAlphabet[] = { "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" };
     size_t extAlphLen = strlen(extAlphabet);
     srand(unsigned int(time(0)));
-    for (size_t i = 0; i < PEER_ID_MAX_SIZE; ++i)
+    size_t i;
+    for (i = 0; i < PEER_ID_SIZE; ++i)
     {
         _id[i] = extAlphabet[rand() % (extAlphLen - 1) + 0];
     }
+    _id[i] = '\0';
 }

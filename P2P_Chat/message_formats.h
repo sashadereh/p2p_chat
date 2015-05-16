@@ -5,14 +5,15 @@
 
 enum MessageType
 {
-    msgEnter,
-    msgQuit,
-    msgText,
-    msgFileBegin,
-    msgFileBlock,
-    msgResendFileBlock,
-    msgFirst = msgEnter,
-    msgLast = msgResendFileBlock
+    M_ENTER,
+    M_QUIT,
+    M_TEXT,
+    M_FILE_BEGIN,
+    M_FILE_BLOCK,
+    M_RESEND_FILE_BLOCK,
+    M_PEER_DATA,
+    FIRST = M_ENTER,
+    LAST = M_PEER_DATA
 };
 
 /*
@@ -41,12 +42,12 @@ struct MessageSys
 struct MessagePeerData
 {
     unsigned char _code;
-    uint _nicknameLen;
+    uint _nicknameLength;
+    char _id[PEER_ID_SIZE + 1];
     wchar_t _nickname[1];
-    char _id[PEER_ID_MAX_SIZE];
 };
 
-#define SZ_MESSAGE_PEERDARA (sizeof(SZ_MESSAGE_SYS) + sizeof(uint) + sizeof(_id))
+#define SZ_MESSAGE_PEERDATA (SZ_MESSAGE_SYS + sizeof(uint) + sizeof(char[PEER_ID_SIZE + 1]))
 
 // Text message
 struct MessageText

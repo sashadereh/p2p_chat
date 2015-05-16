@@ -12,6 +12,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <codecvt>
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
@@ -25,7 +26,7 @@
 #define SERVICE_THREAD "ServiceThread"
 #define FILESWATCHER_THREAD "FilesThread"
 
-#define PEER_ID_MAX_SIZE 20
+#define PEER_ID_SIZE 20
 
 using namespace std;
 
@@ -52,5 +53,7 @@ typedef unsigned int uint;
 static uint PORT = 54321;
 static bool DoShutdown = false;
 static map<cc_string, auto_ptr<Thread>> ThreadsMap;
+
+string to_string(const wstring& str);
 
 #endif // UTILS_H

@@ -3,7 +3,6 @@
 
 #include "utils.h"
 #include "Peer.h"
-#include "Handlers.h"
 
 #include <mutex>
 
@@ -55,6 +54,47 @@ private:
 
     // Handlers
 
+    class Handler
+    {
+    public:
+        virtual ~Handler() {}
+        virtual void handle(cc_string data, size_t size) = 0;
+        static void setChatInstance(ChatClient* chatClient) { _chatClient = chatClient; }
+    protected:
+        static ChatClient* _chatClient;
+    };
+    typedef vector< Handler* > Handlers;
+
+    class HandlerSys : public Handler {
+    public:
+        void handle(cc_string data, size_t size);
+    };
+
+    class HandlerText : public Handler {
+    public:
+        void handle(cc_string data, size_t size);
+    };
+
+    class HandlerPeerData : public Handler {
+    public:
+        void handle(cc_string data, size_t size);
+    };
+
+    class HandlerFileBegin : public Handler {
+    public:
+        void handle(cc_string data, size_t size);
+    };
+
+    class HandlerFileBlock : public Handler {
+    public:
+        void handle(cc_string data, size_t size);
+    };
+
+    class HandlerResendFileBlock : public Handler {
+    public:
+        void handle(cc_string data, size_t size);
+    };
+
     boost::asio::io_service _ioService;
 
     UdpSocket _sendSocket;
@@ -70,7 +110,7 @@ private:
     Mutex _filesMutex;
     Handlers _handlers;
     Peer _thisPeer;
-    PeersMap _peersMap;
+    map<cc_string, Peer> _peersMap;
 
     // async
 

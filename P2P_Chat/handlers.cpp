@@ -1,41 +1,73 @@
-#include "Handlers.h"
 #include "ChatClient.h"
 #include "MessageBuilder.h"
 #include "message_formats.h"
 #include "Logger.h"
 
-ChatClient* Handler::_chatClient = 0;
+ChatClient* ChatClient::Handler::_chatClient = 0;
 
-void HandlerSys::handle(cc_string data, size_t size)
+void ChatClient::HandlerSys::handle(cc_string data, size_t size)
 {
     MessageSys* msgSys = (MessageSys*)data;
+
     string action;
     action.assign(msgSys->_action);
+    string peerId;
+    peerId.assign(msgSys->_peerId);
+
+    map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
 
     if (action == "enter")
     {
-
+        if (it == _chatClient->_peersMap.end())
+            Logger::GetInstance()->Trace("Received 'enter' message from unknown peer ", peerId);
+        else
+        {
+            wcout << it->second.GetNickname();
+            cout << " entered chat.";
+        }
     }
     else if (action == "quit")
     {
-
+        if (it == _chatClient->_peersMap.end())
+            Logger::GetInstance()->Trace("Received 'quit' message from unknown peer ", peerId);
+        else if (peerId != _chatClient->_thisPeer.GetId())
+        {
+            wcout << it->second.GetNickname();
+            cout << " left out chat.";
+            _chatClient->_peersMap.erase(it);
+        }
     }
     else if (action == "alive")
     {
-
+        if (it == _chatClient->_peersMap.end() && peerId != _chatClient->_thisPeer.GetId())
+            Logger::GetInstance()->Trace("Received 'alive' message from unknown peer ", peerId);
+        else if (peerId != _chatClient->_thisPeer.GetId())
+        {
+            // handle alive-message
+        }
     }
 }
 
-void handlerText::handle(cc_string data, size_t size)
+void ChatClient::HandlerText::handle(cc_string data, size_t size)
 {
-    // output to the console
-    MessageText* mt = (MessageText*)data;
-    cout << _chatClient->_recvEndpoint.address().to_string() << " > ";
-    wcout.write(mt->text, mt->length);
-    cout << endl;
+    MessageText* msgText = (MessageText*)data;
+
+    string peerId;
+    peerId.assign(msgText->_peerId);
+
+    map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
+
+    if (it == _chatClient->_peersMap.end() && peerId != _chatClient->_thisPeer.GetId())
+        Logger::GetInstance()->Trace("Received text message from unknown peer ", peerId);
+    else
+    {
+        wcout << it->second.GetNickname() << " > ";
+        wcout.write(msgText->text, msgText->length);
+        wcout << endl;
+    }
 }
 
-void HandlerPeerData::handle(cc_string data, size_t size)
+void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
 {
     MessagePeerData* msgPeerData = (MessagePeerData*)data;
 
@@ -44,18 +76,19 @@ void HandlerPeerData::handle(cc_string data, size_t size)
     wstring peerNick;
     peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
 
-    if (peerId != _chatClient->GetPeerId())
+    if (peerId != _chatClient->_thisPeer.GetId())
     {
         Logger::GetInstance()->Trace("Found peer: ", peerId, ", adding to peers map");
 
         wstring peerNick;
         peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
         Peer foundPeer(peerNick, peerId.c_str());
-    }
-    
+        foundPeer.SetIp(_chatClient->_recvEndpoint.address().to_string());
+        _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
+    }    
 }
 
-void handlerFileBegin::handle(cc_string data, size_t)
+void ChatClient::HandlerFileBegin::handle(cc_string data, size_t)
 {
     MessageFileBegin* mfb = (MessageFileBegin*)data;
     auto_ptr< UploadingFilesContext > ctx(new UploadingFilesContext);
@@ -114,7 +147,7 @@ void handlerFileBegin::handle(cc_string data, size_t)
     return;
 }
 
-void handlerFileBlock::handle(cc_string data, size_t)
+void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
 {
     MessageFileBlock* mfp = (MessageFileBlock*)data;
 
@@ -158,12 +191,12 @@ void handlerFileBlock::handle(cc_string data, size_t)
 
     // requesting the next block
 
-    _chatClient->SendTo(ctx->endpoint, MessageBuilder::resendFileBlock(ctx->id, ctx->blocksReceived));
+    _chatClient->SendTo(ctx->endpoint, MessageBuilder::ResendableFileBlock(ctx->id, ctx->blocksReceived));
 
     return;
 }
 
-void handlerResendFileBlock::handle(cc_string data, size_t)
+void ChatClient::HandlerResendFileBlock::handle(cc_string data, size_t)
 {
     MessageResendFileBlock* mrfp = (MessageResendFileBlock*)data;
 
@@ -197,7 +230,7 @@ void handlerResendFileBlock::handle(cc_string data, size_t)
     input.seekg(mrfp->block * FILE_BLOCK_MAX);
     input.read(raw, sizeof(raw));
 
-    _chatClient->SendTo(fsc->endpoint, MessageBuilder::fileBlock(mrfp->id, mrfp->block, raw, (uint32)input.gcount()));
+    _chatClient->SendTo(fsc->endpoint, MessageBuilder::FileBlock(mrfp->id, mrfp->block, raw, (uint32)input.gcount()));
 
     input.close();
 

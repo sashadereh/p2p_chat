@@ -48,18 +48,19 @@ struct MessagePeerData
     wchar_t _nickname[1];
 };
 
-#define SZ_MESSAGE_PEERDATA (SZ_MESSAGE_SYS + sizeof(uint) + sizeof(char[PEER_ID_SIZE + 1]))
+#define SZ_MESSAGE_PEERDATA (sizeof(uint8) + sizeof(uint32) + sizeof(char[PEER_ID_SIZE + 1]))
 
 // Text message
 struct MessageText
 {
     uint8 code;
     uint32 length;
+    char _peerId[PEER_ID_SIZE + 1];
     // "open array", we don't know about size of data. This field will have address in struct.
     wchar_t text[1];
 };
 
-#define SZ_MESSAGE_TEXT (SZ_MESSAGE_SYS + sizeof(uint))
+#define SZ_MESSAGE_TEXT (sizeof(uint8) + sizeof(uint32) + sizeof(char[PEER_ID_SIZE + 1]))
 
 // File information message (First message, which file-sender send, when sending file)
 struct MessageFileBegin
@@ -71,7 +72,7 @@ struct MessageFileBegin
     char name[1];
 };
 
-#define SZ_MESSAGE_FILE_BEGIN (SZ_MESSAGE_SYS + 3 * sizeof(uint))
+#define SZ_MESSAGE_FILE_BEGIN (sizeof(uint8) + 3 * sizeof(uint32))
 
 // File block message
 struct MessageFileBlock
@@ -83,7 +84,7 @@ struct MessageFileBlock
     char data[1];
 };
 
-#define SZ_MESSAGE_FILE_BLOCK (SZ_MESSAGE_SYS + 3 * sizeof(uint))
+#define SZ_MESSAGE_FILE_BLOCK (sizeof(uint8) + 3 * sizeof(uint32))
 
 #define FILE_BLOCK_MAX (6 * 1024)
 
@@ -95,7 +96,7 @@ struct MessageResendFileBlock
     uint32 block;
 };
 
-#define SZ_MESSAGE_RESEND_FILE_BLOCK (SZ_MESSAGE_SYS + 2 * sizeof(uint))
+#define SZ_MESSAGE_RESEND_FILE_BLOCK (sizeof(uint8) + 2 * sizeof(uint32))
 
 #pragma pack(pop)
 

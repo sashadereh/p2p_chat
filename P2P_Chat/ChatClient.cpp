@@ -30,13 +30,19 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     // Create handlers
     Handler::setChatInstance(this);
     _handlers.resize(LAST + 1);
-    _handlers[M_ENTER] = new HandlerSys;
-    _handlers[M_QUIT] = new handlerQuit;
-    _handlers[M_TEXT] = new handlerText;
-    _handlers[M_FILE_BEGIN] = new handlerFileBegin;
-    _handlers[M_FILE_BLOCK] = new handlerFileBlock;
-    _handlers[M_RESEND_FILE_BLOCK] = new handlerResendFileBlock;
+    _handlers[M_SYS] = new HandlerSys;
+    _handlers[M_TEXT] = new HandlerText;
+    _handlers[M_FILE_BEGIN] = new HandlerFileBegin;
+    _handlers[M_FILE_BLOCK] = new HandlerFileBlock;
+    _handlers[M_RESEND_FILE_BLOCK] = new HandlerResendFileBlock;
     _handlers[M_PEER_DATA] = new HandlerPeerData;
+
+    // Set local ip here
+    boost::asio::ip::udp::resolver resolver(_ioService);
+    boost::asio::ip::udp::resolver::query query(boost::asio::ip::host_name(), "");
+    boost::asio::ip::udp::resolver::iterator it = resolver.resolve(query);
+    boost::asio::ip::udp::endpoint endpoint = *it;
+    _thisPeer.SetIp(endpoint.address().to_string());
 
     // Socket for sending
     _sendSocket.open(_sendEndpoint.protocol());
@@ -53,10 +59,6 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
         boost::bind(&ChatClient::HandleReceiveFrom, this,
         boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
-
-    _thisPeer.SetNickname(L"Sasha Derekh");
-    wcout << _thisPeer.GetNickname();
-    cout << _thisPeer.GetId();
 
     /*
     In this thread io_service is ran
@@ -336,6 +338,11 @@ int ChatClient::loop()
 {
     try
     {
+        cout << "Hello! Please, type your nick > ";
+        wstring nick;
+        getline(wcin, nick);
+        _thisPeer.SetNickname(nick);
+        SendSystemMsgInternal("enter");
         SendPeerDataMsg();
         for (wstring line;;)
         {
@@ -366,7 +373,7 @@ int ChatClient::loop()
                 cout << "ERR: " << e.what() << endl;
             }
         }
-        SendSystemMsgInternal(M_QUIT);
+        SendSystemMsgInternal("quit");
     }
     catch (const exception& e) {
         cout << e.what() << endl;
@@ -380,7 +387,7 @@ int ChatClient::loop()
 void ChatClient::SendSystemMsgInternal(cc_string action)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(_sendEndpoint, MessageBuilder::system(action));
+    SendTo(_sendEndpoint, MessageBuilder::System(action, PEER_ID));
 }
 
 void ChatClient::SendPeerDataMsg()
@@ -394,7 +401,7 @@ void ChatClient::SendPeerDataMsg()
 void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& msg)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(endpoint, MessageBuilder::text(msg));
+    SendTo(endpoint, MessageBuilder::Text(msg, PEER_ID));
 }
 
 // send file message
@@ -462,7 +469,7 @@ void ChatClient::SendFileInfoMsgInternal(SentFilesContext * ctx)
 
     // make packet and send FMWFI
 
-    SendTo(ctx->endpoint, MessageBuilder::fileBegin(ctx->id, ctx->totalBlocks, fileName));
+    SendTo(ctx->endpoint, MessageBuilder::FileBegin(ctx->id, ctx->totalBlocks, fileName));
 
     ctx->ts = time(0);
 }
@@ -471,7 +478,7 @@ void ChatClient::SendFileInfoMsgInternal(SentFilesContext * ctx)
 
 void ChatClient::SendResendMsgInternal(UploadingFilesContext* ctx)
 {
-    SendTo(ctx->endpoint, MessageBuilder::resendFileBlock(
+    SendTo(ctx->endpoint, MessageBuilder::ResendableFileBlock(
         ctx->id, ctx->blocksReceived));
 }
 

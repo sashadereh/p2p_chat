@@ -18,6 +18,14 @@ void Peer::SetNickname(const wstring& nick)
         _nickname = nick;
 }
 
+void Peer::SetIp(const string& ip)
+{
+    if (ip.empty())
+        return;
+    else
+        _ip = ip;
+}
+
 
 void Peer::GenerateId()
 {

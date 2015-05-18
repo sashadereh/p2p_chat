@@ -52,8 +52,6 @@ typedef short uint16;
 typedef long uint32;
 typedef long uint64;
 
-typedef map<cc_string, Peer> PeersMap;
-
 // Global variables
 static uint32 Port = 54321;
 static bool DoShutdown = false;

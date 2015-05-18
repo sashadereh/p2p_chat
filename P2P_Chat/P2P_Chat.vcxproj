@@ -132,7 +132,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ChatClient.h" />
-    <ClInclude Include="Handlers.h" />
     <ClInclude Include="Logger.h" />
     <ClInclude Include="MessageBuilder.h" />
     <ClInclude Include="message_formats.h" />

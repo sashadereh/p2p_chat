@@ -6,7 +6,7 @@
 class Peer
 {
 public:
-    Peer(const wstring& nick);
+    Peer(const wstring& nick, cc_string peerId = NULL);
     Peer() { GenerateId(); }
     ~Peer() {}
     void SetNickname(const wstring& nick);

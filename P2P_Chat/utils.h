@@ -47,10 +47,15 @@ typedef ifstream InFile;
 typedef char* c_string;
 typedef const char* cc_string;
 
-typedef unsigned int uint;
+typedef unsigned char uint8;
+typedef short uint16;
+typedef long uint32;
+typedef long uint64;
+
+typedef map<cc_string, Peer> PeersMap;
 
 // Global variables
-static uint PORT = 54321;
+static uint32 Port = 54321;
 static bool DoShutdown = false;
 static map<cc_string, auto_ptr<Thread>> ThreadsMap;
 

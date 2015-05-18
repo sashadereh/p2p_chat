@@ -3,6 +3,7 @@
 
 #include "utils.h"
 #include "Peer.h"
+#include "Handlers.h"
 
 #include <mutex>
 
@@ -11,6 +12,9 @@ class ChatClient
 public:
     virtual ~ChatClient();
     static ChatClient& GetInstance();
+    const string& GetPeerId() const { return _thisPeer.GetId(); }
+    const wstring& GetPeerNick() const { return _thisPeer.GetNickname(); }
+    void SendSystemMessage();
 
     int loop();
 
@@ -26,10 +30,10 @@ private:
     struct UploadingFilesContext
     {
         UdpEndpoint endpoint;             // from
-        uint blocks;              // total blocks
-        uint blocksReceived;      // received blocks
-        uint resendCount;         // sending requests (for one block!)
-        uint id;                  // file id on the receiver side
+        uint32 blocks;              // total blocks
+        uint32 blocksReceived;      // received blocks
+        uint32 resendCount;         // sending requests (for one block!)
+        uint32 id;                  // file id on the receiver side
         ofstream fp;                      // read from it
         time_t ts;                        // last block received
         string name;                      // file name
@@ -40,100 +44,56 @@ private:
     struct SentFilesContext
     {
         UdpEndpoint endpoint;               // to
-        uint id;                    // file id on the sender side
-        uint totalBlocks;            // total blocks
+        uint32 id;                    // file id on the sender side
+        uint32 totalBlocks;            // total blocks
         string    path;                        // file path
         bool firstBlockSent;                   // has first block been sent?
         time_t ts;                            // first block sent
-        uint resendCount;            // sending requests (for one block!)
+        uint32 resendCount;            // sending requests (for one block!)
     };
     typedef map< unsigned, SentFilesContext* > SentFilesMap;
 
     // Handlers
 
-    class Handler
-    {
-    public:
-        virtual ~Handler() {}
-        virtual void handle(const char *data, size_t size) = 0;
-        static void setChatInstance(ChatClient* chatClient) { _chatClient = chatClient; }
-    protected:
-        static ChatClient* _chatClient;
-    };
-    typedef vector< Handler* > Handlers;
-
-    class handlerEnter : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerQuit : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerText : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class HandlerPeerData : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerFileBegin : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerFileBlock : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerResendFileBlock : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
     boost::asio::io_service _ioService;
+
     UdpSocket _sendSocket;
     UdpSocket _recvSocket;
     UdpEndpoint _sendEndpoint;
     UdpEndpoint _recvEndpoint;
-    boost::array<char, 64 * 1024> _data;
-    volatile int _runThreads;
-    int _port;
-    uint _fileId;
+    uint32 _port;
+    volatile uint8 _runThreads;
+    boost::array<char, 64 * 1024> _data;    
+    uint32 _fileId;
     UploadingFilesMap _files;
     SentFilesMap _filesSent;
     Mutex _filesMutex;
     Handlers _handlers;
     Peer _thisPeer;
+    PeersMap _peersMap;
 
     // async
 
     void ServiceThread();
     void ServiceFilesWatcher();
-    void handleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
+    void HandleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
 
     // parsing
 
-    UdpEndpoint parseEpFromString(const string&);
-    void parseUserInput(const wstring& data);
-    void parseTwoStrings(const wstring& str, string& s1, wstring& s2);
-    void printSysMessage(const UdpEndpoint& endpoint, const string& msg);
+    UdpEndpoint ParseEpFromString(const string&);
+    void ParseUserInput(const wstring& data);
+    void ParseTwoStrings(const wstring& str, string& s1, wstring& s2);
+    void PrintSystemMsg(const UdpEndpoint& endpoint, const string& msg);
 
     // senders
 
-    void sendSysMsg(unsigned sysMsg);
+    void SendSystemMsgInternal(cc_string action);
     void SendPeerDataMsg();
-    void sendMsg(const UdpEndpoint& endpoint, const wstring& message);
-    void sendFile(const UdpEndpoint& endpoint, const wstring& path);
-    void sendTo(const UdpEndpoint& endpoint, const string& m);
-    void sendResendMsg(UploadingFilesContext* ctx);
-    void sendFirstFileMsg(SentFilesContext* ctx);
+    void SendTextInternal(const UdpEndpoint& endpoint, const wstring& message);
+    void SendFileInternal(const UdpEndpoint& endpoint, const wstring& path);
+    void SendTo(const UdpEndpoint& endpoint, const string& m);
+    void SendResendMsgInternal(UploadingFilesContext* ctx);
+    void SendFileInfoMsgInternal(SentFilesContext* ctx);
 };
 
 #endif // CHAT_CLIENT_H

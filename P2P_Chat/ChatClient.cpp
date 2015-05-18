@@ -20,17 +20,17 @@ static const short int ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send 
 
 ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
-    , _sendEndpoint(Ipv4Address::broadcast(), PORT)
-    , _recvEndpoint(Ipv4Address::any(), PORT)
+    , _sendEndpoint(Ipv4Address::broadcast(), Port)
+    , _recvEndpoint(Ipv4Address::any(), Port)
     , _runThreads(1)
-    , _port(PORT)
+    , _port(Port)
     , _fileId(0)
 {
     Logger::GetInstance()->Trace("Chat client started");
     // Create handlers
     Handler::setChatInstance(this);
     _handlers.resize(LAST + 1);
-    _handlers[M_ENTER] = new handlerEnter;
+    _handlers[M_ENTER] = new HandlerSys;
     _handlers[M_QUIT] = new handlerQuit;
     _handlers[M_TEXT] = new handlerText;
     _handlers[M_FILE_BEGIN] = new handlerFileBegin;
@@ -50,7 +50,7 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     _recvSocket.bind(_recvEndpoint);
     _recvSocket.async_receive_from(
         boost::asio::buffer(_data), _recvEndpoint,
-        boost::bind(&ChatClient::handleReceiveFrom, this,
+        boost::bind(&ChatClient::HandleReceiveFrom, this,
         boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
 
@@ -157,7 +157,7 @@ void ChatClient::ServiceFilesWatcher()
                 if (fc->resendCount >= ATTEMPTS_TO_RECEIVE_BLOCK)
                 {
                     // delete this download
-                    printSysMessage(fc->endpoint, "downloading ended with error!");
+                    PrintSystemMsg(fc->endpoint, "downloading ended with error!");
                     _files.erase(it++);
                     fc->fp.close();
 
@@ -176,11 +176,11 @@ void ChatClient::ServiceFilesWatcher()
                     ss.str(string());
 
                     ss << "request dropped packet " << fc->blocksReceived << " from " << fc->blocks;
-                    printSysMessage(fc->endpoint, ss.str());
+                    PrintSystemMsg(fc->endpoint, ss.str());
                 }
 
                 fc->resendCount += 1;
-                sendResendMsg(fc);
+                SendResendMsgInternal(fc);
                 ++it;
             }
             // files we send
@@ -198,7 +198,7 @@ void ChatClient::ServiceFilesWatcher()
                 if (fsc->resendCount >= ATTEMPTS_TO_SEND_FIRST_M)
                 {
                     // delete this download
-                    printSysMessage(fsc->endpoint, "sending ended with ERROR");
+                    PrintSystemMsg(fsc->endpoint, "sending ended with ERROR");
                     _filesSent.erase(it++);
                     delete fsc;
                     continue;
@@ -207,7 +207,7 @@ void ChatClient::ServiceFilesWatcher()
                 // send again
 
                 fsc->resendCount += 1;
-                sendFirstFileMsg(fsc);
+                SendFileInfoMsgInternal(fsc);
                 ++it;
             }
         }
@@ -215,28 +215,28 @@ void ChatClient::ServiceFilesWatcher()
 }
 
 // async reading handler (udp socket)
-void ChatClient::handleReceiveFrom(const ErrorCode& err, size_t size)
+void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
 {
     if (err) return;
 
     // parse received packet
     MessageSys * pmsys = (MessageSys*)_data.data();
-    if (pmsys->code <= LAST)
+    if (pmsys->_code <= LAST)
     {
         ScopedLock lk(_filesMutex);
-        (_handlers[pmsys->code])->handle(_data.data(), size);
+        (_handlers[pmsys->_code])->handle(_data.data(), size);
     }
 
     // wait for the next message
     _recvSocket.async_receive_from(
         boost::asio::buffer(_data), _recvEndpoint,
-        boost::bind(&ChatClient::handleReceiveFrom, this,
+        boost::bind(&ChatClient::HandleReceiveFrom, this,
         boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
 }
 
 // try to understand user's input
-void ChatClient::parseUserInput(const wstring& data)
+void ChatClient::ParseUserInput(const wstring& data)
 {
     wstring tmp(data);
 
@@ -255,13 +255,13 @@ void ChatClient::parseUserInput(const wstring& data)
             string  ip;
             wstring msg;
             tmp.erase(0, 1);
-            parseTwoStrings(tmp, ip, msg);
+            ParseTwoStrings(tmp, ip, msg);
             if (ip.empty() || msg.empty())
             {
                 throw logic_error("invalid format.");
             }
             else {
-                sendMsg(parseEpFromString(ip), msg);
+                SendTextInternal(ParseEpFromString(ip), msg);
             }
             return;
 
@@ -273,13 +273,13 @@ void ChatClient::parseUserInput(const wstring& data)
             tmp.erase(0, 5);
             string  ip;
             wstring path;
-            parseTwoStrings(tmp, ip, path);
+            ParseTwoStrings(tmp, ip, path);
             if (ip.empty() || path.empty())
             {
                 throw logic_error("invalid format.");
             }
             else {
-                sendFile(parseEpFromString(ip), path);
+                SendFileInternal(ParseEpFromString(ip), path);
             }
             return;
         }
@@ -288,12 +288,12 @@ void ChatClient::parseUserInput(const wstring& data)
     if (tmp.empty()) return;
 
     // send on broadcast address
-    sendMsg(_sendEndpoint, tmp);
+    SendTextInternal(_sendEndpoint, tmp);
 }
 
 // get endpoint from string
 
-UdpEndpoint ChatClient::parseEpFromString(const string& ip)
+UdpEndpoint ChatClient::ParseEpFromString(const string& ip)
 {
     ErrorCode err;
     IpAddress addr(IpAddress::from_string(ip, err));
@@ -308,14 +308,14 @@ UdpEndpoint ChatClient::parseEpFromString(const string& ip)
 
 // print system message
 
-void ChatClient::printSysMessage(const UdpEndpoint& endpoint, const string& msg)
+void ChatClient::PrintSystemMsg(const UdpEndpoint& endpoint, const string& msg)
 {
     cout << endpoint.address().to_string() << " > " << "*** " << msg << " ***" << endl;
 }
 
 // split a string into two strings by first space-symbol
 
-void ChatClient::parseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
+void ChatClient::ParseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
 {
     s1.clear();
     s2.clear();
@@ -336,7 +336,6 @@ int ChatClient::loop()
 {
     try
     {
-        sendSysMsg(M_ENTER);
         SendPeerDataMsg();
         for (wstring line;;)
         {
@@ -361,13 +360,13 @@ int ChatClient::loop()
             try
             {
                 // parse string
-                parseUserInput(line);
+                ParseUserInput(line);
             }
             catch (const logic_error& e) {
                 cout << "ERR: " << e.what() << endl;
             }
         }
-        sendSysMsg(M_QUIT);
+        SendSystemMsgInternal(M_QUIT);
     }
     catch (const exception& e) {
         cout << e.what() << endl;
@@ -378,29 +377,29 @@ int ChatClient::loop()
 
 // system message
 
-void ChatClient::sendSysMsg(unsigned sysMsg)
+void ChatClient::SendSystemMsgInternal(cc_string action)
 {
     ScopedLock lk(_filesMutex);
-    sendTo(_sendEndpoint, MessageBuilder::system(sysMsg));
+    SendTo(_sendEndpoint, MessageBuilder::system(action));
 }
 
 void ChatClient::SendPeerDataMsg()
 {
     ScopedLock lk(_filesMutex);
-    sendTo(_sendEndpoint, MessageBuilder::PeerData(_thisPeer.GetNickname(), _thisPeer.GetId()));
+    SendTo(_sendEndpoint, MessageBuilder::PeerData(_thisPeer.GetNickname(), _thisPeer.GetId()));
 }
 
 // text message
 
-void ChatClient::sendMsg(const UdpEndpoint& endpoint, const wstring& msg)
+void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& msg)
 {
     ScopedLock lk(_filesMutex);
-    sendTo(endpoint, MessageBuilder::text(msg));
+    SendTo(endpoint, MessageBuilder::text(msg));
 }
 
 // send file message
 
-void ChatClient::sendFile(const UdpEndpoint& endpoint, const wstring& path)
+void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& path)
 {
     ScopedLock lk(_filesMutex);
     string fileName(path.begin(), path.end());
@@ -431,12 +430,12 @@ void ChatClient::sendFile(const UdpEndpoint& endpoint, const wstring& path)
     _filesSent[_fileId] = fsc;
     _fileId += 1;
 
-    sendFirstFileMsg(fsc);
+    SendFileInfoMsgInternal(fsc);
 }
 
 // make and send block of file
 
-void ChatClient::sendFirstFileMsg(SentFilesContext * ctx)
+void ChatClient::SendFileInfoMsgInternal(SentFilesContext * ctx)
 {
     string fileName(ctx->path.begin(), ctx->path.end());
 
@@ -448,7 +447,7 @@ void ChatClient::sendFirstFileMsg(SentFilesContext * ctx)
     // count quantity of blocks
     unsigned blocks = 0;
     input.seekg(0, ifstream::end);
-    blocks = (uint)(input.tellg() / FILE_BLOCK_MAX);
+    blocks = (uint32)(input.tellg() / FILE_BLOCK_MAX);
     if (input.tellg() % FILE_BLOCK_MAX)
         blocks += 1;
 
@@ -463,20 +462,20 @@ void ChatClient::sendFirstFileMsg(SentFilesContext * ctx)
 
     // make packet and send FMWFI
 
-    sendTo(ctx->endpoint, MessageBuilder::fileBegin(ctx->id, ctx->totalBlocks, fileName));
+    SendTo(ctx->endpoint, MessageBuilder::fileBegin(ctx->id, ctx->totalBlocks, fileName));
 
     ctx->ts = time(0);
 }
 
 // make and send message with request of re-sending file block
 
-void ChatClient::sendResendMsg(UploadingFilesContext* ctx)
+void ChatClient::SendResendMsgInternal(UploadingFilesContext* ctx)
 {
-    sendTo(ctx->endpoint, MessageBuilder::resendFileBlock(
+    SendTo(ctx->endpoint, MessageBuilder::resendFileBlock(
         ctx->id, ctx->blocksReceived));
 }
 
-void ChatClient::sendTo(const UdpEndpoint& e, const string& m)
+void ChatClient::SendTo(const UdpEndpoint& e, const string& m)
 {
     _sendSocket.send_to(boost::asio::buffer(m), e);
 }

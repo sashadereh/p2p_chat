@@ -5,14 +5,13 @@
 
 enum MessageType
 {
-    M_ENTER,
-    M_QUIT,
+    M_SYS,
     M_TEXT,
     M_FILE_BEGIN,
     M_FILE_BLOCK,
     M_RESEND_FILE_BLOCK,
     M_PEER_DATA,
-    FIRST = M_ENTER,
+    FIRST = M_SYS,
     LAST = M_PEER_DATA
 };
 
@@ -24,8 +23,8 @@ Compiler make this in order to optimize the speed of access to struct's fields. 
 For example:
     struct MyStruct
     {
-        unsigned char code; // 1 byte
-        uint length; // 4 bytes
+        uint8 code; // 1 byte
+        uint32 length; // 4 bytes
     };
     Compiler can "insert" 3-nil bytes between code and length in order the size of length will be the multiple of a pow(2).
 */
@@ -34,15 +33,17 @@ For example:
 // System message
 struct MessageSys
 {
-    unsigned char code;
+    uint8 _code;
+    char _peerId[PEER_ID_SIZE + 1];
+    char _action[1];
 };
 
-#define SZ_MESSAGE_SYS (sizeof(unsigned char))
+#define SZ_MESSAGE_SYS (sizeof(uint8))
 
 struct MessagePeerData
 {
-    unsigned char _code;
-    uint _nicknameLength;
+    uint8 _code;
+    uint32 _nicknameLength;
     char _id[PEER_ID_SIZE + 1];
     wchar_t _nickname[1];
 };
@@ -52,8 +53,8 @@ struct MessagePeerData
 // Text message
 struct MessageText
 {
-    unsigned char code;
-    uint length;
+    uint8 code;
+    uint32 length;
     // "open array", we don't know about size of data. This field will have address in struct.
     wchar_t text[1];
 };
@@ -63,10 +64,10 @@ struct MessageText
 // File information message (First message, which file-sender send, when sending file)
 struct MessageFileBegin
 {
-    unsigned char code;
-    uint id;
-    uint totalBlocks;
-    uint nameLength;
+    uint8 code;
+    uint32 id;
+    uint32 totalBlocks;
+    uint32 nameLength;
     char name[1];
 };
 
@@ -75,10 +76,10 @@ struct MessageFileBegin
 // File block message
 struct MessageFileBlock
 {
-    unsigned char code;
-    uint id;
-    uint block;
-    uint size;
+    uint8 code;
+    uint32 id;
+    uint32 block;
+    uint32 size;
     char data[1];
 };
 
@@ -89,9 +90,9 @@ struct MessageFileBlock
 // File block message, which is re-sent
 struct MessageResendFileBlock
 {
-    unsigned char code;
-    uint id;
-    uint block;
+    uint8 code;
+    uint32 id;
+    uint32 block;
 };
 
 #define SZ_MESSAGE_RESEND_FILE_BLOCK (SZ_MESSAGE_SYS + 2 * sizeof(uint))

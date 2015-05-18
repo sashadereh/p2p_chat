@@ -1,10 +1,14 @@
 #include "Peer.h"
 
-Peer::Peer(const wstring& nick)
+Peer::Peer(const wstring& nick, cc_string peerId /* = NULL */)
 {
     SetNickname(nick);
-    GenerateId();
+    if (peerId)
+        strcpy_s(_id, PEER_ID_SIZE + 1, peerId);
+    else
+        GenerateId();
 }
+
 
 void Peer::SetNickname(const wstring& nick)
 {
@@ -13,6 +17,7 @@ void Peer::SetNickname(const wstring& nick)
     else
         _nickname = nick;
 }
+
 
 void Peer::GenerateId()
 {

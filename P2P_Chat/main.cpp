@@ -8,7 +8,7 @@ int main(int argc, char ** argv)
     {
         try
         {
-            PORT = boost::lexical_cast<int>(argv[1]);
+            Port = boost::lexical_cast<int>(argv[1]);
         }
         catch (const boost::bad_lexical_cast& err)
         {
@@ -25,7 +25,6 @@ int main(int argc, char ** argv)
     catch (logic_error& err)
     {
         cerr << err.what() << endl;
-        return 0;
+        return 1;
     }
-    return 0;
 }

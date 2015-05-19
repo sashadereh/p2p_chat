@@ -32,6 +32,7 @@ using namespace std;
 
 typedef boost::asio::ip::udp::socket UdpSocket;
 typedef boost::asio::ip::udp::endpoint UdpEndpoint;
+typedef boost::asio::ip::udp::resolver UdpResolver;
 typedef boost::asio::ip::address IpAddress;
 typedef boost::asio::ip::address_v4 Ipv4Address;
 
@@ -48,12 +49,12 @@ typedef char* c_string;
 typedef const char* cc_string;
 
 typedef unsigned char uint8;
-typedef short uint16;
-typedef long uint32;
-typedef long uint64;
+typedef unsigned short uint16;
+typedef unsigned long uint32;
+typedef unsigned long uint64;
 
 // Global variables
-static uint32 Port = 54321;
+static uint16 Port = 54321;
 static bool DoShutdown = false;
 static map<cc_string, auto_ptr<Thread>> ThreadsMap;
 

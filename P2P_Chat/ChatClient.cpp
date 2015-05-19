@@ -37,12 +37,26 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     _handlers[M_RESEND_FILE_BLOCK] = new HandlerResendFileBlock;
     _handlers[M_PEER_DATA] = new HandlerPeerData;
 
-    // Set local ip here
-    boost::asio::ip::udp::resolver resolver(_ioService);
-    boost::asio::ip::udp::resolver::query query(boost::asio::ip::host_name(), "");
-    boost::asio::ip::udp::resolver::iterator it = resolver.resolve(query);
-    boost::asio::ip::udp::endpoint endpoint = *it;
-    _thisPeer.SetIp(endpoint.address().to_string());
+    // Set this-peer ip here
+    try
+    {
+        boost::asio::ip::udp::resolver   resolver(_ioService);
+        boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), boost::asio::ip::host_name(), "");
+        boost::asio::ip::udp::resolver::iterator endpoints = resolver.resolve(query);
+        UdpEndpoint ep = *endpoints;
+        UdpSocket socket(_ioService);
+        socket.connect(ep);
+
+        IpAddress addr = socket.local_endpoint().address();
+        _thisPeer.SetIp(addr.to_string());
+    }
+    catch (exception& e)
+    {
+        cerr << "Could not get local ip. Exception: " << e.what() << endl;
+    }
+
+
+    //_thisPeer.SetIp(endpoint.address().to_v4().to_string());
 
     // Socket for sending
     _sendSocket.open(_sendEndpoint.protocol());
@@ -338,14 +352,22 @@ int ChatClient::loop()
 {
     try
     {
-        cout << "Hello! Please, type your nick > ";
+        cout << "\t\t\tNice to meet you in P2P-Chat!" << endl;
         wstring nick;
-        getline(wcin, nick);
+        do 
+        {
+            nick.clear();
+            cout << endl;
+            cout << "Please, type your nick > ";
+            getline(wcin, nick);
+        } while (nick.empty());
         _thisPeer.SetNickname(nick);
-        SendSystemMsgInternal("enter");
+
         SendPeerDataMsg();
+
         for (wstring line;;)
         {
+            cout << endl;
             getline(wcin, line);
             // delete spaces to the right
             if (line.empty() == false)
@@ -387,7 +409,7 @@ int ChatClient::loop()
 void ChatClient::SendSystemMsgInternal(cc_string action)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(_sendEndpoint, MessageBuilder::System(action, PEER_ID));
+    SendTo(_sendEndpoint, MessageBuilder::System(action, _thisPeer.GetId().c_str()));
 }
 
 void ChatClient::SendPeerDataMsg()
@@ -401,7 +423,7 @@ void ChatClient::SendPeerDataMsg()
 void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& msg)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(endpoint, MessageBuilder::Text(msg, PEER_ID));
+    SendTo(endpoint, MessageBuilder::Text(msg, _thisPeer.GetId().c_str()));
 }
 
 // send file message

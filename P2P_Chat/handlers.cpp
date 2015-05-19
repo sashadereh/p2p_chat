@@ -16,24 +16,20 @@ void ChatClient::HandlerSys::handle(cc_string data, size_t size)
 
     map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
 
-    if (action == "enter")
+    if (action == "quit")
     {
-        if (it == _chatClient->_peersMap.end())
-            Logger::GetInstance()->Trace("Received 'enter' message from unknown peer ", peerId);
+        if (peerId == _chatClient->_thisPeer.GetId())
+        {
+            return;
+        }
+        else if (it == _chatClient->_peersMap.end())
+        {
+            Logger::GetInstance()->Trace("Received 'quit' message from unknown peer ", peerId);
+        }
         else
         {
             wcout << it->second.GetNickname();
-            cout << " entered chat.";
-        }
-    }
-    else if (action == "quit")
-    {
-        if (it == _chatClient->_peersMap.end())
-            Logger::GetInstance()->Trace("Received 'quit' message from unknown peer ", peerId);
-        else if (peerId != _chatClient->_thisPeer.GetId())
-        {
-            wcout << it->second.GetNickname();
-            cout << " left out chat.";
+            cout << " left out chat." << endl;
             _chatClient->_peersMap.erase(it);
         }
     }
@@ -57,14 +53,21 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
 
     map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
 
-    if (it == _chatClient->_peersMap.end() && peerId != _chatClient->_thisPeer.GetId())
+    if (peerId == _chatClient->_thisPeer.GetId())
+    {
+        wcout << endl << _chatClient->_thisPeer.GetNickname() << " > ";
+    }
+    else if (it == _chatClient->_peersMap.end())
+    {
         Logger::GetInstance()->Trace("Received text message from unknown peer ", peerId);
+        return;
+    }
     else
     {
-        wcout << it->second.GetNickname() << " > ";
-        wcout.write(msgText->text, msgText->length);
-        wcout << endl;
+        wcout << endl << it->second.GetNickname() << " > ";
     }
+    wcout.write(msgText->text, msgText->length);
+    wcout << endl;
 }
 
 void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
@@ -82,8 +85,12 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
 
         wstring peerNick;
         peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
-        Peer foundPeer(peerNick, peerId.c_str());
+        wcout << peerNick;
+        cout << " entered chat." << endl;
+
+        Peer foundPeer(peerNick, peerId);
         foundPeer.SetIp(_chatClient->_recvEndpoint.address().to_string());
+        foundPeer.SetAliveCheck(time(0));
         _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
     }    
 }

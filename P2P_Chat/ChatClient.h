@@ -101,7 +101,7 @@ private:
     UdpSocket _recvSocket;
     UdpEndpoint _sendEndpoint;
     UdpEndpoint _recvEndpoint;
-    uint32 _port;
+    uint16 _port;
     volatile uint8 _runThreads;
     boost::array<char, 64 * 1024> _data;    
     uint32 _fileId;

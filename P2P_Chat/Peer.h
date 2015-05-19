@@ -6,18 +6,20 @@
 class Peer
 {
 public:
-    Peer(const wstring& nick, cc_string peerId = NULL);
-    Peer() { GenerateId(); }
+    Peer(const wstring& nick, const string& peerId);
+    Peer();
     ~Peer() {}
     void SetNickname(const wstring& nick);
     void SetIp(const string& ip);
+    void SetAliveCheck(time_t time);
     
     const wstring& GetNickname() const { return _nickname; }
-    const string GetId() const { return string(_id); }
+    const string& GetId() const { return _id; }
+    const string& GetIp() const { return _ip; }
 private:
     wstring _nickname;
     string _ip;
-    char _id[PEER_ID_SIZE + 1];
+    string _id;
     time_t _lastAliveCheck;
 
     void GenerateId();

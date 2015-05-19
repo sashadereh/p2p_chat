@@ -38,7 +38,7 @@ struct MessageSys
     char _action[1];
 };
 
-#define SZ_MESSAGE_SYS (sizeof(uint8))
+#define SZ_MESSAGE_SYS (sizeof(uint8) + sizeof(char[PEER_ID_SIZE + 1]))
 
 struct MessagePeerData
 {

@@ -10,7 +10,7 @@ std::string MessageBuilder::System(cc_string action, const string& peerId)
     MessageSys* msgSys = (MessageSys*)raw.data();
 
     msgSys->_code = M_SYS;
-    memcpy(msgSys, action, strlen(action) + 1);
+    memcpy(msgSys->_action, action, strlen(action) + 1);
     memcpy(msgSys->_peerId, peerId.c_str(), PEER_ID_SIZE + 1);
 
     return raw;

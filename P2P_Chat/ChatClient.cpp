@@ -87,10 +87,11 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
     /*
-    
+    It is our chat's system thread
+    We send alive messages here, etc
     */
-    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
-        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
+//     ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
+//         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
 }
 
 ChatClient::~ChatClient()
@@ -244,7 +245,9 @@ void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
     MessageSys * pmsys = (MessageSys*)_data.data();
     if (pmsys->_code <= LAST)
     {
+        cout << "We are waiting for locking in HandleReceiveFrom" << endl;
         ScopedLock lk(_filesMutex);
+        cout << "We unlocked!" << endl;
         (_handlers[pmsys->_code])->handle(_data.data(), size);
     }
 
@@ -316,10 +319,12 @@ void ChatClient::ParseUserInput(const wstring& data)
 
 UdpEndpoint ChatClient::ParseEpFromString(const string& ip)
 {
+    cout << "We are in ParseEpFromString, ip = %s" << ip << endl;
     ErrorCode err;
     IpAddress addr(IpAddress::from_string(ip, err));
     if (err)
     {
+        cout << "Can't parse this ip!" << endl;
         throw logic_error("can't parse this IP");
     }
     else {
@@ -413,21 +418,28 @@ int ChatClient::loop()
 
 void ChatClient::SendSystemMsgInternal(cc_string action)
 {
+    cout << "We are waiting for locking in SendSystemMsg" << endl;
     ScopedLock lk(_filesMutex);
+    cout << "We unlocked!" << endl;
     SendTo(_sendEndpoint, MessageBuilder::System(action, _thisPeer.GetId().c_str()));
 }
 
 void ChatClient::SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id)
 {
+    cout << "We are waiting for locking in SendPeerDataMsg" << endl;
     ScopedLock lk(_filesMutex);
+    cout << "We unlock mutex" << endl;
     SendTo(endpoint, MessageBuilder::PeerData(nick, id));
+    cout << "We are go out from func" << endl;
 }
 
 // text message
 
 void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& msg)
 {
+    cout << "We are waiting for locking in SendTextInternal" << endl;
     ScopedLock lk(_filesMutex);
+    cout << "We unlocked!" << endl;
     SendTo(endpoint, MessageBuilder::Text(msg, _thisPeer.GetId().c_str()));
 }
 
@@ -435,7 +447,9 @@ void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& ms
 
 void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& path)
 {
+    cout << "We are waiting for locking in SendFileInternal" << endl;
     ScopedLock lk(_filesMutex);
+    cout << "We unlocked!" << endl;
     string fileName(path.begin(), path.end());
 
     ifstream input;

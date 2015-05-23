@@ -5,12 +5,13 @@
 std::string MessageBuilder::System(cc_string action, const string& peerId)
 {
     string raw;
-    raw.resize(SZ_MESSAGE_SYS, 0);
+    size_t rawLen = strlen(action) + 1;
+    raw.resize(rawLen + SZ_MESSAGE_SYS, 0);
 
     MessageSys* msgSys = (MessageSys*)raw.data();
 
     msgSys->_code = M_SYS;
-    memcpy(msgSys->_action, action, strlen(action) + 1);
+    memcpy(msgSys->_action, action, rawLen);
     memcpy(msgSys->_peerId, peerId.c_str(), PEER_ID_SIZE + 1);
 
     return raw;
@@ -19,7 +20,7 @@ std::string MessageBuilder::System(cc_string action, const string& peerId)
 std::string MessageBuilder::PeerData(const wstring& nick, const string& id)
 {
     string raw;
-    int rawLen = nick.length() * sizeof(wchar_t);
+    size_t rawLen = nick.length() * sizeof(wchar_t);
     raw.resize(rawLen + SZ_MESSAGE_PEERDATA, 0);
 
     MessagePeerData* msgPeerData = (MessagePeerData*)raw.data();
@@ -35,7 +36,7 @@ std::string MessageBuilder::PeerData(const wstring& nick, const string& id)
 std::string MessageBuilder::Text(const wstring& msg, const string& peerId)
 {
     string raw;
-    int rawLen = msg.length() * sizeof(wchar_t);
+    size_t rawLen = msg.length() * sizeof(wchar_t);
     raw.resize(rawLen + SZ_MESSAGE_TEXT, 0);
 
     MessageText* msgText = (MessageText*)raw.data();
@@ -51,7 +52,7 @@ std::string MessageBuilder::Text(const wstring& msg, const string& peerId)
 string MessageBuilder::FileBegin(uint32 id, uint32 totalBlocks, const string& fileName)
 {
     string raw;
-    int rawLen = fileName.length() * sizeof(char);
+    size_t rawLen = fileName.length() * sizeof(char);
     raw.resize(rawLen + SZ_MESSAGE_FILE_BEGIN, 0);
 
     MessageFileBegin* pfb = (MessageFileBegin*)raw.data();

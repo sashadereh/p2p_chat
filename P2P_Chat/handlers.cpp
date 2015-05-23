@@ -58,9 +58,9 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
     string peerId;
     peerId.assign(msgText->_peerId);
 
-    for (const auto it : _chatClient->_peersMap)
+    for (const auto &it : _chatClient->_peersMap)
     {
-        Logger::GetInstance()->Trace("Element of peers map: ", it.first, it.second);
+        Logger::GetInstance()->Trace("Element of peers map: ", it.first);
     }
 
     auto it = _chatClient->_peersMap.find(peerId.c_str());
@@ -91,8 +91,11 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
     wstring peerNick;
     peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
 
-    if (peerId != _chatClient->_thisPeer.GetId())
+    auto it = _chatClient->_peersMap.find(peerId.c_str());
+
+    if (peerId != _chatClient->_thisPeer.GetId() && it == _chatClient->_peersMap.end())
     {
+        cout << "Found Peer" << endl;
         Logger::GetInstance()->Trace("Found peer: ", peerId, ", adding to peers map");
 
         wstring peerNick;
@@ -105,8 +108,12 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
         foundPeer.SetAliveCheck(time(0));
         _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
 
+        cout << "Sending our PD in response" << endl;
         // Send our peer data to found peer
-        _chatClient->SendPeerDataMsg(_chatClient->ParseEpFromString(foundPeer.GetIp()), _chatClient->_thisPeer.GetNickname(), _chatClient->_thisPeer.GetId());
+        UdpEndpoint udE = _chatClient->ParseEpFromString(foundPeer.GetIp());
+        cout << "We made endpoint";
+        _chatClient->SendPeerDataMsg(udE, _chatClient->_thisPeer.GetNickname(), _chatClient->_thisPeer.GetId());
+        cout << "Sent!" << endl;
     }    
 }
 

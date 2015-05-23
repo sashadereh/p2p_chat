@@ -35,11 +35,18 @@ void ChatClient::HandlerSys::handle(cc_string data, size_t size)
     }
     else if (action == "alive")
     {
-        if (it == _chatClient->_peersMap.end() && peerId != _chatClient->_thisPeer.GetId())
-            Logger::GetInstance()->Trace("Received 'alive' message from unknown peer ", peerId);
-        else if (peerId != _chatClient->_thisPeer.GetId())
+        if (peerId == _chatClient->_thisPeer.GetId())
         {
-            // handle alive-message
+            return;
+        }
+        else if (it == _chatClient->_peersMap.end())
+        {
+            Logger::GetInstance()->Trace("Received 'alive' message from unknown peer ", peerId);
+        }
+        else
+        {
+            // Here we should have a ScopedLock
+            it->second.SetAliveCheck(time(0));
         }
     }
 }
@@ -51,7 +58,12 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
     string peerId;
     peerId.assign(msgText->_peerId);
 
-    map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
+    for (const auto it : _chatClient->_peersMap)
+    {
+        Logger::GetInstance()->Trace("Element of peers map: ", it.first, it.second);
+    }
+
+    auto it = _chatClient->_peersMap.find(peerId.c_str());
 
     if (peerId == _chatClient->_thisPeer.GetId())
     {
@@ -92,6 +104,9 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
         foundPeer.SetIp(_chatClient->_recvEndpoint.address().to_string());
         foundPeer.SetAliveCheck(time(0));
         _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
+
+        // Send our peer data to found peer
+        _chatClient->SendPeerDataMsg(_chatClient->ParseEpFromString(foundPeer.GetIp()), _chatClient->_thisPeer.GetNickname(), _chatClient->_thisPeer.GetId());
     }    
 }
 
@@ -101,7 +116,6 @@ void ChatClient::HandlerFileBegin::handle(cc_string data, size_t)
     auto_ptr< UploadingFilesContext > ctx(new UploadingFilesContext);
 
     // maybe we have the same already (is downloading)
-
     stringstream ss;
     ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfb->id;
     string key(ss.str());

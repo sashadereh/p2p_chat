@@ -78,11 +78,16 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     In this thread io_service is ran
     We can't read user's input without it
     */
-    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(SERVICE_THREAD,
-        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceThread, this)))));
+    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(BOOST_SERVICE_THREAD,
+        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::BoostServiceThread, this)))));
     /*
     This thread track all downloading files and send a re-send message
     if time of received block less than sender pointed out
+    */
+    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
+        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
+    /*
+    
     */
     ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
@@ -105,8 +110,8 @@ ChatClient::~ChatClient()
     if (ThreadsMap[FILESWATCHER_THREAD].get())
         ThreadsMap[FILESWATCHER_THREAD]->join();
 
-    if (ThreadsMap[SERVICE_THREAD].get())
-        ThreadsMap[SERVICE_THREAD]->join();
+    if (ThreadsMap[BOOST_SERVICE_THREAD].get())
+        ThreadsMap[BOOST_SERVICE_THREAD]->join();
     
     ThreadsMap.clear();
 
@@ -135,7 +140,7 @@ ChatClient& ChatClient::GetInstance()
 
 // Thread function
 
-void ChatClient::ServiceThread()
+void ChatClient::BoostServiceThread()
 {
     ErrorCode ec;
 
@@ -363,7 +368,7 @@ int ChatClient::loop()
         } while (nick.empty());
         _thisPeer.SetNickname(nick);
 
-        SendPeerDataMsg();
+        SendPeerDataMsg(_sendEndpoint, _thisPeer.GetNickname(), _thisPeer.GetId());
 
         for (wstring line;;)
         {
@@ -412,10 +417,10 @@ void ChatClient::SendSystemMsgInternal(cc_string action)
     SendTo(_sendEndpoint, MessageBuilder::System(action, _thisPeer.GetId().c_str()));
 }
 
-void ChatClient::SendPeerDataMsg()
+void ChatClient::SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(_sendEndpoint, MessageBuilder::PeerData(_thisPeer.GetNickname(), _thisPeer.GetId()));
+    SendTo(endpoint, MessageBuilder::PeerData(nick, id));
 }
 
 // text message

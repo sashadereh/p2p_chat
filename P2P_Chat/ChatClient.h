@@ -112,10 +112,12 @@ private:
     Peer _thisPeer;
     map<cc_string, Peer> _peersMap;
 
+    void BoostServiceThread();
+    void ServiceFilesWatcher();
+    void ServiceThread();
+
     // async
 
-    void ServiceThread();
-    void ServiceFilesWatcher();
     void HandleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
 
     // parsing
@@ -128,7 +130,7 @@ private:
     // senders
 
     void SendSystemMsgInternal(cc_string action);
-    void SendPeerDataMsg();
+    void SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id);
     void SendTextInternal(const UdpEndpoint& endpoint, const wstring& message);
     void SendFileInternal(const UdpEndpoint& endpoint, const wstring& path);
     void SendTo(const UdpEndpoint& endpoint, const string& m);

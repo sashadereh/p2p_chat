@@ -23,8 +23,9 @@
 #define SIMULATE_PACKET_LOOSING 0
 
 #define LOG_THREAD "LoggerThread"
-#define SERVICE_THREAD "ServiceThread"
+#define BOOST_SERVICE_THREAD "BoostServiceThread"
 #define FILESWATCHER_THREAD "FilesThread"
+#define SERVICE_THREAD "ServiceThread"
 
 #define PEER_ID_SIZE 20
 

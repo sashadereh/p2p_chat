@@ -57,9 +57,9 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
     string peerId;
     peerId.assign(msgText->_peerId);
 
-    for (const auto it : _chatClient->_peersMap)
+    for (const auto &it : _chatClient->_peersMap)
     {
-        Logger::GetInstance()->Trace("Element of peers map: ", it.first, it.second);
+        Logger::GetInstance()->Trace("Element of peers map: ", it.first);
     }
 
     auto it = _chatClient->_peersMap.find(peerId.c_str());
@@ -90,8 +90,11 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
     wstring peerNick;
     peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
 
-    if (peerId != _chatClient->_thisPeer.GetId())
+    auto it = _chatClient->_peersMap.find(peerId.c_str());
+
+    if (peerId != _chatClient->_thisPeer.GetId() && it == _chatClient->_peersMap.end())
     {
+        cout << "Found Peer" << endl;
         Logger::GetInstance()->Trace("Found peer: ", peerId, ", adding to peers map");
 
         wstring peerNick;

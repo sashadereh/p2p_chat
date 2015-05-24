@@ -8,6 +8,8 @@
 #include "MessageBuilder.h"
 #include "Logger.h"
 
+#define CHAT_ERROR "[Chat Core]-ERROR: "
+
 unique_ptr<ChatClient> ChatClient::_instance;
 once_flag ChatClient::_onceFlag;
 
@@ -49,11 +51,13 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
         socket.connect(ep);
 
         IpAddress addr = socket.local_endpoint().address();
-        _thisPeer.SetIp(addr.to_string());
+        string ipAddr(addr.to_string());
+        Logger::GetInstance()->Trace("Using ip address ", ipAddr);
+        _thisPeer.SetIp(ipAddr);
     }
     catch (exception& e)
     {
-        cerr << "Could not get local ip. Exception: " << e.what() << endl;
+        Logger::GetInstance()->Trace(CHAT_ERROR, "Can't get local ip due to ", e.what());
     }
 
     // Socket for sending
@@ -203,7 +207,7 @@ void ChatClient::ServiceFilesWatcher()
                 if (fc->resendCount >= ATTEMPTS_TO_RECEIVE_BLOCK)
                 {
                     // delete this download
-                    PrintSystemMsg(fc->endpoint, "downloading ended with error!");
+                    Logger::GetInstance()->Trace(CHAT_ERROR, "Download of ", fc->name, " ended with ERROR!");
                     _files.erase(it++);
                     fc->fp.close();
 
@@ -220,9 +224,8 @@ void ChatClient::ServiceFilesWatcher()
                 if (fc->blocksReceived > 0)
                 {
                     ss.str(string());
-
-                    ss << "request dropped packet " << fc->blocksReceived << " from " << fc->blocks;
-                    PrintSystemMsg(fc->endpoint, ss.str());
+                    ss << "Request dropped packet " << fc->blocksReceived << " from " << fc->blocks;
+                    Logger::GetInstance()->Trace("File ", fc->name, ": ", ss.str());
                 }
 
                 fc->resendCount += 1;
@@ -244,7 +247,7 @@ void ChatClient::ServiceFilesWatcher()
                 if (fsc->resendCount >= ATTEMPTS_TO_SEND_FIRST_M)
                 {
                     // delete this download
-                    PrintSystemMsg(fsc->endpoint, "sending ended with ERROR");
+                    Logger::GetInstance()->Trace(CHAT_ERROR, "Sending of ", fsc->path, " ended with ERROR!");
                     _filesSent.erase(it++);
                     delete fsc;
                     continue;
@@ -306,7 +309,8 @@ void ChatClient::ParseUserInput(const wstring& data)
             {
                 throw logic_error("invalid format.");
             }
-            else {
+            else
+            {
                 SendTextInternal(ParseEpFromString(ip), msg);
             }
             return;
@@ -347,7 +351,8 @@ UdpEndpoint ChatClient::ParseEpFromString(const string& ip)
     {
         throw logic_error("can't parse this IP");
     }
-    else {
+    else
+    {
         return UdpEndpoint(addr, _port);
     }
 }
@@ -425,9 +430,11 @@ int ChatClient::loop()
                 cout << "ERR: " << e.what() << endl;
             }
         }
+        Logger::GetInstance()->Trace("Shutdown");
         SendSystemMsgInternal("quit");
     }
-    catch (const exception& e) {
+    catch (const exception& e)
+    {
         cout << e.what() << endl;
     }
 

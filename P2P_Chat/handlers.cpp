@@ -118,7 +118,7 @@ void ChatClient::HandlerFileBegin::handle(cc_string data, size_t)
     if (it != _chatClient->_files.end())
     {
         ss.str(string());
-        ss << "this file is already downloading '" << mfb->name << "'";
+        ss << "This file is already downloading '" << mfb->name << "'";
         _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
         return;
     }
@@ -140,9 +140,7 @@ void ChatClient::HandlerFileBegin::handle(cc_string data, size_t)
         return;
     }
 
-    ss.str(string());
-    ss << "start loading file '" << mfb->name << "'";
-    _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
+    Logger::GetInstance()->Trace("Start downloading file ", mfb->name);
 
     // fill in the fields
     ctx->endpoint = _chatClient->_recvEndpoint;
@@ -177,7 +175,7 @@ void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
 
     if (ctx == 0 || mfp->block >= ctx->blocks)
     {
-        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, "received block is out of queue!");
+        Logger::GetInstance()->Trace("Received block for file ", ctx->name, " is out of queue!");
         return;
     }
 
@@ -190,7 +188,7 @@ void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
 
     if (ctx->blocks == ctx->blocksReceived)
     {
-        _chatClient->PrintSystemMsg(ctx->endpoint, "done loading file");
+        Logger::GetInstance()->Trace("Done loading file ", ctx->name);
         _chatClient->_files.erase(_chatClient->_files.find(key));
         ctx->fp.close();
         delete ctx;
@@ -200,8 +198,8 @@ void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
     if (!(mfp->block % 89))
     {
         ss.str(string());
-        ss << "downloaded block " << mfp->block << " from " << ctx->blocks;
-        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
+        ss << "Downloaded block " << mfp->block << " from " << ctx->blocks;
+        Logger::GetInstance()->Trace("File: ", ctx->name, ". ", ss.str());
     }
 
     // requesting the next block
@@ -235,7 +233,7 @@ void ChatClient::HandlerResendFileBlock::handle(cc_string data, size_t)
     input.open(fsc->path.c_str(), ifstream::in | ios_base::binary);
     if (!input.is_open())
     {
-        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, "can't open file.");
+        Logger::GetInstance()->Trace("File: ", fsc->path, ". Can't open it!");
         return;
     }
 

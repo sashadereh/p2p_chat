@@ -97,11 +97,8 @@ ChatClient::~ChatClient()
     _runThreads = 0;
     DoShutdown = true;
 
-    _recvSocket.close();
-    _sendSocket.close();
-    _ioService.stop();
-
-    // Wait for the completion of the threads
+    if (ThreadsMap[CHAT_SERVICE_THREAD].get())
+        ThreadsMap[CHAT_SERVICE_THREAD]->join();
 
     if (ThreadsMap[LOG_THREAD].get())
         ThreadsMap[LOG_THREAD]->join();
@@ -109,9 +106,10 @@ ChatClient::~ChatClient()
     if (ThreadsMap[FILESWATCHER_THREAD].get())
         ThreadsMap[FILESWATCHER_THREAD]->join();
 
-    if (ThreadsMap[CHAT_SERVICE_THREAD].get())
-        ThreadsMap[CHAT_SERVICE_THREAD]->join();
-
+    _recvSocket.close();
+    _sendSocket.close();
+    _ioService.stop();
+    
     if (ThreadsMap[BOOST_SERVICE_THREAD].get())
         ThreadsMap[BOOST_SERVICE_THREAD]->join();
     
@@ -163,21 +161,21 @@ void ChatClient::ChatServiceThread()
     while (_runThreads)
     {
         boost::this_thread::sleep(boost::posix_time::seconds(1));
+
+        SendSystemMsgInternal("alive");
+
+        for (auto &it : _peersMap)
         {
-            SendSystemMsgInternal("alive");
+            if (difftime(time(0), it.second.GetLastAliveCheck()) > SECONDS_TO_BE_ALIVE)
+                _peersMap.erase(it.first);
 
-            for (auto &it : _peersMap)
+            if (!it.second.WasHandshake())
             {
-                if (difftime(time(0), it.second.GetLastAliveCheck()) > SECONDS_TO_BE_ALIVE)
-                    _peersMap.erase(it.first);
-
-                if (!it.second.WasHandshake())
-                {
-                    SendPeerDataMsg(ParseEpFromString(it.second.GetIp()), _thisPeer.GetNickname(), _thisPeer.GetId());
-                    it.second.MakeHandshake();
-                }
+                SendPeerDataMsg(ParseEpFromString(it.second.GetIp()), _thisPeer.GetNickname(), _thisPeer.GetId());
+                it.second.MakeHandshake();
             }
         }
+
     }
 }
 

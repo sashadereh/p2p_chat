@@ -1,36 +1,115 @@
 #include "ChatClient.h"
 #include "MessageBuilder.h"
 #include "message_formats.h"
-#include "utils.h"
+#include "Logger.h"
 
 ChatClient* ChatClient::Handler::_chatClient = 0;
 
-void ChatClient::handlerEnter::handle(const char*, size_t)
+void ChatClient::HandlerSys::handle(cc_string data, size_t size)
 {
-    _chatClient->printSysMessage(_chatClient->_recvEndpoint, "enter chat");
+    MessageSys* msgSys = (MessageSys*)data;
+
+    string action;
+    action.assign(msgSys->_action);
+    string peerId;
+    peerId.assign(msgSys->_peerId);
+
+    map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
+
+    if (action == "quit")
+    {
+        if (peerId == _chatClient->_thisPeer.GetId())
+        {
+            return;
+        }
+        else if (it == _chatClient->_peersMap.end())
+        {
+            Logger::GetInstance()->Trace("Received 'quit' message from unknown peer ", peerId);
+        }
+        else
+        {
+            wcout << it->second.GetNickname();
+            cout << " left out chat." << endl;
+            _chatClient->_peersMap.erase(it);
+        }
+    }
+    else if (action == "alive")
+    {
+        if (peerId == _chatClient->_thisPeer.GetId())
+        {
+            return;
+        }
+        else if (it == _chatClient->_peersMap.end())
+        {
+            Logger::GetInstance()->Trace("Received 'alive' message from unknown peer ", peerId);
+            return;
+        }
+        else
+        {
+            it->second.SetAliveCheck(time(0));
+        }
+    }
 }
 
-void ChatClient::handlerQuit::handle(const char*, size_t)
+void ChatClient::HandlerText::handle(cc_string data, size_t size)
 {
-    _chatClient->printSysMessage(_chatClient->_recvEndpoint, "quit chat");
+    MessageText* msgText = (MessageText*)data;
+
+    string peerId;
+    peerId.assign(msgText->_peerId);
+
+    auto it = _chatClient->_peersMap.find(peerId.c_str());
+
+    if (peerId == _chatClient->_thisPeer.GetId())
+    {
+        wcout << endl << _chatClient->_thisPeer.GetNickname() << " > ";
+    }
+    else if (it == _chatClient->_peersMap.end())
+    {
+        Logger::GetInstance()->Trace("Received text message from unknown peer ", peerId);
+        return;
+    }
+    else
+    {
+        wcout << endl << it->second.GetNickname() << " > ";
+    }
+    wcout.write(msgText->text, msgText->length);
+    wcout << endl;
 }
 
-void ChatClient::handlerText::handle(const char* data, size_t)
+void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
 {
-    // output to the console
-    MessageText* mt = (MessageText*)data;
-    cout << _chatClient->_recvEndpoint.address().to_string() << " > ";
-    wcout.write(mt->text, mt->length);
-    cout << endl;
+    MessagePeerData* msgPeerData = (MessagePeerData*)data;
+
+    string peerId;
+    peerId.assign(msgPeerData->_id);
+    wstring peerNick;
+    peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
+
+    auto it = _chatClient->_peersMap.find(peerId.c_str());
+
+    if (peerId != _chatClient->_thisPeer.GetId() && it == _chatClient->_peersMap.end())
+    {
+        Logger::GetInstance()->Trace("Found peer: ", peerId, ", adding to peers map");
+
+        wstring peerNick;
+        peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
+        wcout << peerNick;
+        cout << " entered chat." << endl;
+
+        Peer foundPeer(peerNick, peerId);
+        foundPeer.SetIp(_chatClient->_recvEndpoint.address().to_string());
+        foundPeer.SetAliveCheck(time(0));
+        _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
+    }    
 }
 
-void ChatClient::handlerFileBegin::handle(const char* data, size_t)
+void ChatClient::HandlerFileBegin::handle(cc_string data, size_t)
 {
     MessageFileBegin* mfb = (MessageFileBegin*)data;
     auto_ptr< UploadingFilesContext > ctx(new UploadingFilesContext);
 
     // maybe we have the same already (is downloading)
-
     stringstream ss;
     ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfb->id;
     string key(ss.str());
@@ -40,7 +119,7 @@ void ChatClient::handlerFileBegin::handle(const char* data, size_t)
     {
         ss.str(string());
         ss << "this file is already downloading '" << mfb->name << "'";
-        _chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
+        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
         return;
     }
 
@@ -57,13 +136,13 @@ void ChatClient::handlerFileBegin::handle(const char* data, size_t)
     {
         ss.str(string());
         ss << "can't open for writing '" << mfb->name << "'";
-        _chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
+        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
         return;
     }
 
     ss.str(string());
     ss << "start loading file '" << mfb->name << "'";
-    _chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
+    _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
 
     // fill in the fields
     ctx->endpoint = _chatClient->_recvEndpoint;
@@ -76,14 +155,14 @@ void ChatClient::handlerFileBegin::handle(const char* data, size_t)
     ctx->ts = time(0);
 
     // requesting the first packet
-    _chatClient->sendResendMsg(ctx.get());
+    _chatClient->SendResendMsgInternal(ctx.get());
 
     // save this for the next use
     _chatClient->_files[key] = ctx.release();
     return;
 }
 
-void ChatClient::handlerFileBlock::handle(const char *data, size_t)
+void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
 {
     MessageFileBlock* mfp = (MessageFileBlock*)data;
 
@@ -98,7 +177,7 @@ void ChatClient::handlerFileBlock::handle(const char *data, size_t)
 
     if (ctx == 0 || mfp->block >= ctx->blocks)
     {
-        _chatClient->printSysMessage(_chatClient->_recvEndpoint, "received block is out of queue!");
+        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, "received block is out of queue!");
         return;
     }
 
@@ -111,7 +190,7 @@ void ChatClient::handlerFileBlock::handle(const char *data, size_t)
 
     if (ctx->blocks == ctx->blocksReceived)
     {
-        _chatClient->printSysMessage(ctx->endpoint, "done loading file");
+        _chatClient->PrintSystemMsg(ctx->endpoint, "done loading file");
         _chatClient->_files.erase(_chatClient->_files.find(key));
         ctx->fp.close();
         delete ctx;
@@ -122,23 +201,23 @@ void ChatClient::handlerFileBlock::handle(const char *data, size_t)
     {
         ss.str(string());
         ss << "downloaded block " << mfp->block << " from " << ctx->blocks;
-        _chatClient->printSysMessage(_chatClient->_recvEndpoint, ss.str());
+        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
     }
 
     // requesting the next block
 
-    _chatClient->sendTo(ctx->endpoint, MessageBuilder::resendFileBlock(ctx->id, ctx->blocksReceived));
+    _chatClient->SendTo(ctx->endpoint, MessageBuilder::ResendableFileBlock(ctx->id, ctx->blocksReceived));
 
     return;
 }
 
-void ChatClient::handlerResendFileBlock::handle(const char *data, size_t)
+void ChatClient::HandlerResendFileBlock::handle(cc_string data, size_t)
 {
     MessageResendFileBlock* mrfp = (MessageResendFileBlock*)data;
 
     if (SIMULATE_PACKET_LOOSING == 1)
     {
-        srand((uint)time(NULL));
+        srand((uint32)time(NULL));
         if ((rand() % 10 + 1) > 7)
             return;
     }
@@ -156,7 +235,7 @@ void ChatClient::handlerResendFileBlock::handle(const char *data, size_t)
     input.open(fsc->path.c_str(), ifstream::in | ios_base::binary);
     if (!input.is_open())
     {
-        _chatClient->printSysMessage(_chatClient->_recvEndpoint, "can't open file.");
+        _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, "can't open file.");
         return;
     }
 
@@ -166,7 +245,7 @@ void ChatClient::handlerResendFileBlock::handle(const char *data, size_t)
     input.seekg(mrfp->block * FILE_BLOCK_MAX);
     input.read(raw, sizeof(raw));
 
-    _chatClient->sendTo(fsc->endpoint, MessageBuilder::fileBlock(mrfp->id, mrfp->block, raw, (uint)input.gcount()));
+    _chatClient->SendTo(fsc->endpoint, MessageBuilder::FileBlock(mrfp->id, mrfp->block, raw, (uint32)input.gcount()));
 
     input.close();
 

@@ -1,15 +1,18 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <stdio.h>
 #include <string>
+#include <sstream>
 #include <cstring>
+#include <cstdint>
+#include <ctime>
 #include <memory>
 #include <map>
 #include <vector>
+#include <iostream>
 #include <fstream>
-#include <ctime>
-#include <fstream>
-#include <thread>
+#include <codecvt>
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
@@ -20,13 +23,17 @@
 #define SIMULATE_PACKET_LOOSING 0
 
 #define LOG_THREAD "LoggerThread"
-#define SERVICE_THREAD "ServiceThread"
+#define BOOST_SERVICE_THREAD "BoostServiceThread"
 #define FILESWATCHER_THREAD "FilesThread"
+#define CHAT_SERVICE_THREAD "ServiceThread"
+
+#define PEER_ID_SIZE 20
 
 using namespace std;
 
 typedef boost::asio::ip::udp::socket UdpSocket;
 typedef boost::asio::ip::udp::endpoint UdpEndpoint;
+typedef boost::asio::ip::udp::resolver UdpResolver;
 typedef boost::asio::ip::address IpAddress;
 typedef boost::asio::ip::address_v4 Ipv4Address;
 
@@ -42,11 +49,16 @@ typedef ifstream InFile;
 typedef char* c_string;
 typedef const char* cc_string;
 
-typedef unsigned int uint;
+typedef unsigned char uint8;
+typedef unsigned short uint16;
+typedef unsigned long uint32;
+typedef unsigned long uint64;
 
 // Global variables
-static uint PORT = 54321;
+static uint16 Port = 54321;
 static bool DoShutdown = false;
 static map<cc_string, auto_ptr<Thread>> ThreadsMap;
+
+string to_string(const wstring& str);
 
 #endif // UTILS_H

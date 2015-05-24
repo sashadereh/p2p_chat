@@ -135,14 +135,16 @@
     <ClInclude Include="Logger.h" />
     <ClInclude Include="MessageBuilder.h" />
     <ClInclude Include="message_formats.h" />
+    <ClInclude Include="Peer.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ChatClient.cpp" />
-    <ClCompile Include="handlers.cpp" />
+    <ClCompile Include="Handlers.cpp" />
     <ClCompile Include="Logger.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MessageBuilder.cpp" />
+    <ClCompile Include="Peer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

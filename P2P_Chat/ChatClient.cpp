@@ -13,10 +13,11 @@ once_flag ChatClient::_onceFlag;
 
 // Constants for FilesWatcherThread
 
-static const short int SECONDS_TO_LOOSE_PACKET = 1; // seconds. Incoming packet is lost after this time (we decide).
-static const short int ATTEMPTS_TO_RECEIVE_BLOCK = 5; // attempts. Download is interrupted after reaching this limit.
-static const short int SECONDS_TO_WAIT_ANSWER = 5; // seconds. First message with file information (FMWFI) is re-sent after this time.
-static const short int ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send FMWFI after reaching this limit.
+static const uint8 SECONDS_TO_LOOSE_PACKET = 1; // seconds. Incoming packet is lost after this time (we decide).
+static const uint8 ATTEMPTS_TO_RECEIVE_BLOCK = 5; // attempts. Download is interrupted after reaching this limit.
+static const uint8 SECONDS_TO_WAIT_ANSWER = 5; // seconds. First message with file information (FMWFI) is re-sent after this time.
+static const uint8 ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send FMWFI after reaching this limit.
+static const uint8 SECONDS_TO_BE_ALIVE = 3;
 
 ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
@@ -55,9 +56,6 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
         cerr << "Could not get local ip. Exception: " << e.what() << endl;
     }
 
-
-    //_thisPeer.SetIp(endpoint.address().to_v4().to_string());
-
     // Socket for sending
     _sendSocket.open(_sendEndpoint.protocol());
     _sendSocket.set_option(UdpSocket::reuse_address(true));
@@ -87,10 +85,11 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
     /*
-    
+    It is our system thread
+    Here we send alive messages, send PeerData messages etc
     */
-    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
-        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
+    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(CHAT_SERVICE_THREAD,
+        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ChatServiceThread, this)))));
 }
 
 ChatClient::~ChatClient()
@@ -109,6 +108,9 @@ ChatClient::~ChatClient()
 
     if (ThreadsMap[FILESWATCHER_THREAD].get())
         ThreadsMap[FILESWATCHER_THREAD]->join();
+
+    if (ThreadsMap[CHAT_SERVICE_THREAD].get())
+        ThreadsMap[CHAT_SERVICE_THREAD]->join();
 
     if (ThreadsMap[BOOST_SERVICE_THREAD].get())
         ThreadsMap[BOOST_SERVICE_THREAD]->join();
@@ -138,7 +140,7 @@ ChatClient& ChatClient::GetInstance()
     return *_instance.get();
 }
 
-// Thread function
+// Thread function: BOOST_SERVICE_THREAD
 
 void ChatClient::BoostServiceThread()
 {
@@ -154,7 +156,32 @@ void ChatClient::BoostServiceThread()
         cout << ec.message();
 }
 
-// Thread function
+// Thread function: CHAT_SERVICE_THREAD
+
+void ChatClient::ChatServiceThread()
+{
+    while (_runThreads)
+    {
+        boost::this_thread::sleep(boost::posix_time::seconds(1));
+        {
+            SendSystemMsgInternal("alive");
+
+            for (auto &it : _peersMap)
+            {
+                if (difftime(time(0), it.second.GetLastAliveCheck()) > SECONDS_TO_BE_ALIVE)
+                    _peersMap.erase(it.first);
+
+                if (!it.second.WasHandshake)
+                {
+                    SendPeerDataMsg(ParseEpFromString(it.second.GetIp()), _thisPeer.GetNickname(), _thisPeer.GetId());
+                    it.second.MakeHandshake();
+                }
+            }
+        }
+    }
+}
+
+// Thread function: FILESWATCHER_THREAD
 
 void ChatClient::ServiceFilesWatcher()
 {

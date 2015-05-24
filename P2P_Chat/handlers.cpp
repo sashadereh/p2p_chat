@@ -45,7 +45,6 @@ void ChatClient::HandlerSys::handle(cc_string data, size_t size)
         }
         else
         {
-            // Here we should have a ScopedLock
             it->second.SetAliveCheck(time(0));
         }
     }
@@ -104,9 +103,6 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
         foundPeer.SetIp(_chatClient->_recvEndpoint.address().to_string());
         foundPeer.SetAliveCheck(time(0));
         _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
-
-        // Send our peer data to found peer
-        _chatClient->SendPeerDataMsg(_chatClient->ParseEpFromString(foundPeer.GetIp()), _chatClient->_thisPeer.GetNickname(), _chatClient->_thisPeer.GetId());
     }    
 }
 

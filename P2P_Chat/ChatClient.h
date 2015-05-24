@@ -13,7 +13,6 @@ public:
     static ChatClient& GetInstance();
     const string& GetPeerId() const { return _thisPeer.GetId(); }
     const wstring& GetPeerNick() const { return _thisPeer.GetNickname(); }
-    void SendSystemMessage();
 
     int loop();
 
@@ -114,7 +113,7 @@ private:
 
     void BoostServiceThread();
     void ServiceFilesWatcher();
-    void ServiceThread();
+    void ChatServiceThread();
 
     // async
 

@@ -5,9 +5,6 @@ once_flag Logger::_onceFlag;
 
 Logger::Logger() : _timePosted(false)
 {
-    _logFile.open(LOGFILE_PATH, ios_base::app);
-    if (!_logFile.is_open())
-        exit(1);
     _loggerMutex.initialize();
     Enable();
 }
@@ -62,6 +59,7 @@ void Logger::InsertTimeInString(stringstream& strStream)
     strStream << buffer;
 }
 
+// Thread function: LOG_THREAD
 
 void Logger::MessageQueueHandler()
 {
@@ -70,11 +68,13 @@ void Logger::MessageQueueHandler()
         boost::this_thread::sleep(boost::posix_time::seconds(1));
         {
             ScopedLock lk(_loggerMutex);
+            _logFile.open(LOGFILE_PATH, ios_base::app);
             while (!_messageQueue.empty())
             {
                 _logFile << _messageQueue.front();
                 _messageQueue.pop();
             }
+            _logFile.close();
         }
     }
 

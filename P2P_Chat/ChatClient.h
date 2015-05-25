@@ -107,6 +107,7 @@ private:
     UploadingFilesMap _files;
     SentFilesMap _filesSent;
     Mutex _filesMutex;
+    Mutex _peersMapMutex;
     Handlers _handlers;
     Peer _thisPeer;
     map<cc_string, Peer> _peersMap;
@@ -128,7 +129,7 @@ private:
 
     // senders
 
-    void SendSystemMsgInternal(cc_string action);
+    void SendSystemMsgInternal(const UdpEndpoint& endpoint, cc_string action);
     void SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id);
     void SendTextInternal(const UdpEndpoint& endpoint, const wstring& message);
     void SendFileInternal(const UdpEndpoint& endpoint, const wstring& path);

@@ -19,7 +19,7 @@ static const uint8 SECONDS_TO_LOOSE_PACKET = 1; // seconds. Incoming packet is l
 static const uint8 ATTEMPTS_TO_RECEIVE_BLOCK = 5; // attempts. Download is interrupted after reaching this limit.
 static const uint8 SECONDS_TO_WAIT_ANSWER = 5; // seconds. First message with file information (FMWFI) is re-sent after this time.
 static const uint8 ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send FMWFI after reaching this limit.
-static const uint8 SECONDS_TO_BE_ALIVE = 3;
+static const uint8 SECONDS_TO_BE_ALIVE = 5;
 
 ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
@@ -98,7 +98,6 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
 
 ChatClient::~ChatClient()
 {
-    _runThreads = 0;
     DoShutdown = true;
 
     if (ThreadsMap[CHAT_SERVICE_THREAD].get())
@@ -164,22 +163,40 @@ void ChatClient::ChatServiceThread()
 {
     while (_runThreads)
     {
-        boost::this_thread::sleep(boost::posix_time::seconds(1));
+        time_t entryTime = time(0);
 
-        SendSystemMsgInternal("alive");
-
-        for (auto &it : _peersMap)
+        ScopedLock(_peersMapMutex);
+        for (map<cc_string, Peer>::iterator it = _peersMap.begin(); it != _peersMap.end(); it++)
         {
-            if (difftime(time(0), it.second.GetLastAliveCheck()) > SECONDS_TO_BE_ALIVE)
-                _peersMap.erase(it.first);
-
-            if (!it.second.WasHandshake())
+            if (it->second.NeedSendPong())
             {
-                SendPeerDataMsg(ParseEpFromString(it.second.GetIp()), _thisPeer.GetNickname(), _thisPeer.GetId());
-                it.second.MakeHandshake();
+                SendSystemMsgInternal(ParseEpFromString(it->second.GetIp()), "pong");
+                it->second.ShouldSendPong(false);
+            }
+            else if (!it->second.WasHandshake())
+            {
+                SendPeerDataMsg(ParseEpFromString(it->second.GetIp()), _thisPeer.GetNickname(), _thisPeer.GetId());
+                it->second.MakeHandshake();
+            }
+            else if (difftime(entryTime, it->second.GetLastAliveCheck() > SECONDS_TO_BE_ALIVE && !it->second.IsPingSent()))
+            {
+                SendSystemMsgInternal(ParseEpFromString(it->second.GetIp()), "ping");
+                it->second.SetPingSentTime(time(0));
+                it->second.SetPingSent(true);
+            }
+            else if (it->second.IsPingSent() && !it->second.IsPongReceived() && difftime(entryTime, it->second.GetPingSentTime()) > SECONDS_TO_BE_ALIVE)
+            {
+                wcout << it->second.GetNickname();
+                cout << " left out chat." << endl;
+                Logger::GetInstance()->Trace("Peer ", it->second.GetId(), " is offline. Removing from peers map");
+                _peersMap.erase(it);
+            }
+            else if (it->second.IsPingSent() && it->second.IsPongReceived())
+            {
+                it->second.SetPingSent(false);
+                it->second.SetPongReceived(false);
             }
         }
-
     }
 }
 
@@ -272,9 +289,13 @@ void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
     MessageSys * pmsys = (MessageSys*)_data.data();
     if (pmsys->_code <= LAST)
     {
+        if (pmsys->_code < M_FILE_BEGIN || pmsys->_code > M_RESEND_FILE_BLOCK)
+            _peersMapMutex.lock();
+
         ScopedLock lk(_filesMutex);
         (_handlers[pmsys->_code])->handle(_data.data(), size);
     }
+    _peersMapMutex.unlock();
 
     // wait for the next message
     _recvSocket.async_receive_from(
@@ -431,7 +452,8 @@ int ChatClient::loop()
             }
         }
         Logger::GetInstance()->Trace("Shutdown");
-        SendSystemMsgInternal("quit");
+        _runThreads = 0;
+        SendSystemMsgInternal(_sendEndpoint,"quit");
     }
     catch (const exception& e)
     {
@@ -443,10 +465,10 @@ int ChatClient::loop()
 
 // system message
 
-void ChatClient::SendSystemMsgInternal(cc_string action)
+void ChatClient::SendSystemMsgInternal(const UdpEndpoint& endpoint, cc_string action)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(_sendEndpoint, MessageBuilder::System(action, _thisPeer.GetId().c_str()));
+    SendTo(endpoint, MessageBuilder::System(action, _thisPeer.GetId().c_str()));
 }
 
 void ChatClient::SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id)

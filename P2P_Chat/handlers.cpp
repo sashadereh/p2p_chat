@@ -30,10 +30,28 @@ void ChatClient::HandlerSys::handle(cc_string data, size_t size)
         {
             wcout << it->second.GetNickname();
             cout << " left out chat." << endl;
-            _chatClient->_peersMap.erase(it);
+            Logger::GetInstance()->Trace("Peer ", it->second.GetId(), " is offline. Removing from peers map");
+            _chatClient->_peersMap.erase(it->first);
         }
     }
-    else if (action == "alive")
+    else if (action == "ping")
+    {
+        if (peerId == _chatClient->_thisPeer.GetId())
+        {
+            return;
+        }
+        else if (it == _chatClient->_peersMap.end())
+        {
+            Logger::GetInstance()->Trace("Received 'ping' message from unknown peer ", peerId);
+            return;
+        }
+        else
+        {
+            it->second.ShouldSendPong(true);
+            it->second.SetAliveCheck(time(0));
+        }
+    }
+    else if (action == "pong")
     {
         if (peerId == _chatClient->_thisPeer.GetId())
         {
@@ -46,6 +64,7 @@ void ChatClient::HandlerSys::handle(cc_string data, size_t size)
         }
         else
         {
+            it->second.SetPongReceived(true);
             it->second.SetAliveCheck(time(0));
         }
     }
@@ -58,7 +77,7 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
     string peerId;
     peerId.assign(msgText->_peerId);
 
-    auto it = _chatClient->_peersMap.find(peerId.c_str());
+    map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
 
     if (peerId == _chatClient->_thisPeer.GetId())
     {
@@ -71,6 +90,7 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
     }
     else
     {
+        it->second.SetAliveCheck(time(0));
         wcout << endl << it->second.GetNickname() << " > ";
     }
     wcout.write(msgText->text, msgText->length);
@@ -86,7 +106,7 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
     wstring peerNick;
     peerNick.assign(msgPeerData->_nickname, msgPeerData->_nicknameLength);
 
-    auto it = _chatClient->_peersMap.find(peerId.c_str());
+    map<cc_string, Peer>::iterator it = _chatClient->_peersMap.find(peerId.c_str());
 
     if (peerId != _chatClient->_thisPeer.GetId() && it == _chatClient->_peersMap.end())
     {

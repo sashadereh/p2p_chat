@@ -17,9 +17,9 @@ once_flag ChatClient::_onceFlag;
 
 static const uint8 SECONDS_TO_LOOSE_PACKET = 1; // seconds. Incoming packet is lost after this time (we decide).
 static const uint8 ATTEMPTS_TO_RECEIVE_BLOCK = 5; // attempts. Download is interrupted after reaching this limit.
-static const uint8 SECONDS_TO_WAIT_ANSWER = 5; // seconds. First message with file information (FMWFI) is re-sent after this time.
-static const uint8 ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send FMWFI after reaching this limit.
-static const uint8 SECONDS_TO_BE_ALIVE = 5;
+static const uint8 SECONDS_TO_WAIT_ANSWER_ON_MFI = 5; // seconds. Message with file information (M_FI) is re-sent after this time.
+static const uint8 ATTEMPTS_TO_SEND_FIRST_M = 5; // attempts. We can't send M_FI after reaching this limit.
+static const uint8 SECONDS_TO_BE_ALIVE = 2;
 
 ChatClient::ChatClient() : _sendSocket(_ioService)
     , _recvSocket(_ioService)
@@ -35,9 +35,9 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     _handlers.resize(LAST + 1);
     _handlers[M_SYS] = new HandlerSys;
     _handlers[M_TEXT] = new HandlerText;
-    _handlers[M_FILE_BEGIN] = new HandlerFileBegin;
+    _handlers[M_FILE_BEGIN] = new HandlerFileInfo;
     _handlers[M_FILE_BLOCK] = new HandlerFileBlock;
-    _handlers[M_RESEND_FILE_BLOCK] = new HandlerResendFileBlock;
+    _handlers[M_REQ_FOR_FILE_BLOCK] = new HandlerRequestForFileBlock;
     _handlers[M_PEER_DATA] = new HandlerPeerData;
 
     // Set this-peer ip here
@@ -83,25 +83,18 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(BOOST_SERVICE_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::BoostServiceThread, this)))));
     /*
-    This thread track all downloading files and send a re-send message
+    It is our system thread
+    Here we send alive messages, send PeerData messages, track track all downloading files and send a re-send message
     if time of received block less than sender pointed out
     */
     ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
-    /*
-    It is our system thread
-    Here we send alive messages, send PeerData messages etc
-    */
-    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(CHAT_SERVICE_THREAD,
-        auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ChatServiceThread, this)))));
+
 }
 
 ChatClient::~ChatClient()
 {
     DoShutdown = true;
-
-    if (ThreadsMap[CHAT_SERVICE_THREAD].get())
-        ThreadsMap[CHAT_SERVICE_THREAD]->join();
 
     if (ThreadsMap[LOG_THREAD].get())
         ThreadsMap[LOG_THREAD]->join();
@@ -120,10 +113,10 @@ ChatClient::~ChatClient()
 
     // Delete all downloading and sending files
 
-    for (UploadingFilesMap::iterator it = _files.begin(); it != _files.end(); ++it)
+    for (UploadingFilesMap::iterator it = _uploadingFiles.begin(); it != _uploadingFiles.end(); ++it)
         delete ((*it).second);
 
-    for (SentFilesMap::iterator it = _filesSent.begin(); it != _filesSent.end(); ++it)
+    for (SendingFilesMap::iterator it = _sendingFiles.begin(); it != _sendingFiles.end(); ++it)
         delete ((*it).second);
 
     // Delete all handlers
@@ -157,49 +150,6 @@ void ChatClient::BoostServiceThread()
         cout << ec.message();
 }
 
-// Thread function: CHAT_SERVICE_THREAD
-
-void ChatClient::ChatServiceThread()
-{
-    while (_runThreads)
-    {
-        time_t entryTime = time(0);
-
-        ScopedLock(_peersMapMutex);
-        for (map<cc_string, Peer>::iterator it = _peersMap.begin(); it != _peersMap.end(); it++)
-        {
-            if (it->second.NeedSendPong())
-            {
-                SendSystemMsgInternal(ParseEpFromString(it->second.GetIp()), "pong");
-                it->second.ShouldSendPong(false);
-            }
-            else if (!it->second.WasHandshake())
-            {
-                SendPeerDataMsg(ParseEpFromString(it->second.GetIp()), _thisPeer.GetNickname(), _thisPeer.GetId());
-                it->second.MakeHandshake();
-            }
-            else if (difftime(entryTime, it->second.GetLastAliveCheck() > SECONDS_TO_BE_ALIVE && !it->second.IsPingSent()))
-            {
-                SendSystemMsgInternal(ParseEpFromString(it->second.GetIp()), "ping");
-                it->second.SetPingSentTime(time(0));
-                it->second.SetPingSent(true);
-            }
-            else if (it->second.IsPingSent() && !it->second.IsPongReceived() && difftime(entryTime, it->second.GetPingSentTime()) > SECONDS_TO_BE_ALIVE)
-            {
-                wcout << it->second.GetNickname();
-                cout << " left out chat." << endl;
-                Logger::GetInstance()->Trace("Peer ", it->second.GetId(), " is offline. Removing from peers map");
-                _peersMap.erase(it);
-            }
-            else if (it->second.IsPingSent() && it->second.IsPongReceived())
-            {
-                it->second.SetPingSent(false);
-                it->second.SetPongReceived(false);
-            }
-        }
-    }
-}
-
 // Thread function: FILESWATCHER_THREAD
 
 void ChatClient::ServiceFilesWatcher()
@@ -210,8 +160,37 @@ void ChatClient::ServiceFilesWatcher()
         boost::this_thread::sleep(boost::posix_time::seconds(1));
         {
             ScopedLock lk(_filesMutex);
-            // files we receive
-            for (UploadingFilesMap::iterator it = _files.begin(); it != _files.end();)
+            
+            //scan map of peers
+            for (PeersMap::iterator it = _peersMap.begin(); it != _peersMap.end();)
+            {
+                if (!it->second.WasHandshake())
+                {
+                    SendTo(_sendEndpoint, MessageBuilder::PeerData(_thisPeer.GetNickname(), _thisPeer.GetId()));
+                    it->second.MakeHandshake();
+                }
+                else if (it->second.ShouldSendPong())
+                {
+                    SendTo(ParseEpFromString(it->second.GetIp()), MessageBuilder::System("pong", _thisPeer.GetId()));
+                    it->second.ShouldSendPong(false);
+                }
+                else if (difftime(time(0), it->second.GetLastActivityCheck()) > SECONDS_TO_BE_ALIVE)
+                {
+                    if (!it->second.WasPingSent())
+                    {
+                        SendTo(ParseEpFromString(it->second.GetIp()), MessageBuilder::System("ping", _thisPeer.GetId()));
+                        it->second.SetPingSent(true);
+                        it->second.SetPingSentTime(time(0));
+                    }
+                    else if (difftime(time(0), it->second.GetPingSentTime()) > SECONDS_TO_BE_ALIVE)
+                    {
+                        // Delete from peers map
+                    }
+                }
+            }
+
+            // scan map with files, that we receive
+            for (UploadingFilesMap::iterator it = _uploadingFiles.begin(); it != _uploadingFiles.end();)
             {
                 UploadingFilesContext * fc = (*it).second;
                 if (fc == 0 || difftime(time(0), fc->ts) <= SECONDS_TO_LOOSE_PACKET)
@@ -224,8 +203,8 @@ void ChatClient::ServiceFilesWatcher()
                 if (fc->resendCount >= ATTEMPTS_TO_RECEIVE_BLOCK)
                 {
                     // delete this download
-                    Logger::GetInstance()->Trace(CHAT_ERROR, "Download of ", fc->name, " ended with ERROR!");
-                    _files.erase(it++);
+                    Logger::GetInstance()->Trace(CHAT_ERROR, "Download of ", fc->name, " ended with ERROR: peer ", fc->_recvFrom.GetId(), " is offline");
+                    _uploadingFiles.erase(it++);
                     fc->fp.close();
 
                     // delete the file
@@ -249,12 +228,13 @@ void ChatClient::ServiceFilesWatcher()
                 SendResendMsgInternal(fc);
                 ++it;
             }
-            // files we send
-            // if FMWFI is not sent successfully, then, if we have attempts, send it again
-            for (SentFilesMap::iterator it = _filesSent.begin(); it != _filesSent.end();)
+
+            // scan map with files, that we send
+            // if M_FI is not sent successfully, then, if we have attempts, send it again
+            for (SendingFilesMap::iterator it = _sendingFiles.begin(); it != _sendingFiles.end();)
             {
-                SentFilesContext * fsc = (*it).second;
-                if (fsc == 0 || fsc->firstBlockSent || difftime(time(0), fsc->ts) <= SECONDS_TO_WAIT_ANSWER)
+                SendingFilesContext * fsc = (*it).second;
+                if (fsc == 0 || fsc->firstBlockSent || difftime(time(0), fsc->ts) <= SECONDS_TO_WAIT_ANSWER_ON_MFI)
                 {
                     ++it;
                     continue;
@@ -265,7 +245,7 @@ void ChatClient::ServiceFilesWatcher()
                 {
                     // delete this download
                     Logger::GetInstance()->Trace(CHAT_ERROR, "Sending of ", fsc->path, " ended with ERROR!");
-                    _filesSent.erase(it++);
+                    _sendingFiles.erase(it++);
                     delete fsc;
                     continue;
                 }
@@ -286,10 +266,10 @@ void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
     if (err) return;
 
     // parse received packet
-    MessageSys * pmsys = (MessageSys*)_data.data();
+    MessageSystem * pmsys = (MessageSystem*)_data.data();
     if (pmsys->_code <= LAST)
     {
-        if (pmsys->_code < M_FILE_BEGIN || pmsys->_code > M_RESEND_FILE_BLOCK)
+        if (pmsys->_code < M_FILE_BEGIN || pmsys->_code > M_REQ_FOR_FILE_BLOCK)
             _peersMapMutex.lock();
 
         ScopedLock lk(_filesMutex);
@@ -490,13 +470,13 @@ void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& ms
 void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& path)
 {
     ScopedLock lk(_filesMutex);
-    string fileName(path.begin(), path.end());
+    string filePath(path.begin(), path.end());
 
     ifstream input;
-    input.open(fileName.c_str(), ifstream::in | ios_base::binary);
+    input.open(filePath.c_str(), ifstream::in | ios_base::binary);
     if (!input.is_open())
     {
-        cerr << "Error! Can't open file " << fileName << endl;
+        cerr << "Error! Can't open file " << filePath << endl;
 
         input.close();
 
@@ -505,17 +485,17 @@ void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& pa
     input.close();
 
     // add to sent-files map
-    SentFilesContext * fsc = new SentFilesContext;
+    SendingFilesContext * fsc = new SendingFilesContext;
 
     fsc->firstBlockSent = false;
     fsc->totalBlocks = 0;
     fsc->id = _fileId;
-    fsc->path = fileName;
+    fsc->path = filePath;
     fsc->endpoint = endpoint;
     fsc->endpoint.port(_port);
     fsc->resendCount = 0;
     fsc->ts = 0;
-    _filesSent[_fileId] = fsc;
+    _sendingFiles[_fileId] = fsc;
     _fileId += 1;
 
     SendFileInfoMsgInternal(fsc);
@@ -523,7 +503,7 @@ void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& pa
 
 // make and send block of file
 
-void ChatClient::SendFileInfoMsgInternal(SentFilesContext * ctx)
+void ChatClient::SendFileInfoMsgInternal(SendingFilesContext * ctx)
 {
     string fileName(ctx->path.begin(), ctx->path.end());
 
@@ -548,9 +528,9 @@ void ChatClient::SendFileInfoMsgInternal(SentFilesContext * ctx)
     if (t != string::npos)
         fileName.erase(0, t + 1);
 
-    // make packet and send FMWFI
+    // make packet and send M_FI
 
-    SendTo(ctx->endpoint, MessageBuilder::FileBegin(ctx->id, ctx->totalBlocks, fileName));
+    SendTo(ctx->endpoint, MessageBuilder::FileBegin(ctx->id, ctx->totalBlocks, fileName, string())); // TODO: remove a stub
 
     ctx->ts = time(0);
 }
@@ -559,8 +539,8 @@ void ChatClient::SendFileInfoMsgInternal(SentFilesContext * ctx)
 
 void ChatClient::SendResendMsgInternal(UploadingFilesContext* ctx)
 {
-    SendTo(ctx->endpoint, MessageBuilder::ResendableFileBlock(
-        ctx->id, ctx->blocksReceived));
+    SendTo(ctx->endpoint, MessageBuilder::RequestForFileBlock(
+        ctx->id, ctx->blocksReceived, string()));   // TODO: remove a stub
 }
 
 void ChatClient::SendTo(const UdpEndpoint& e, const string& m)

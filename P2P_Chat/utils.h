@@ -25,7 +25,6 @@
 #define LOG_THREAD "LoggerThread"
 #define BOOST_SERVICE_THREAD "BoostServiceThread"
 #define FILESWATCHER_THREAD "FilesThread"
-#define CHAT_SERVICE_THREAD "ServiceThread"
 
 #define PEER_ID_SIZE 20
 

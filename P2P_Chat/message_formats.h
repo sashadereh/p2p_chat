@@ -9,7 +9,7 @@ enum MessageType
     M_TEXT,
     M_FILE_BEGIN,
     M_FILE_BLOCK,
-    M_RESEND_FILE_BLOCK,
+    M_REQ_FOR_FILE_BLOCK,
     M_PEER_DATA,
     FIRST = M_SYS,
     LAST = M_PEER_DATA
@@ -31,7 +31,7 @@ For example:
 #pragma pack(push, 1)
 
 // System message
-struct MessageSys
+struct MessageSystem
 {
     uint8 _code;
     char _peerId[PEER_ID_SIZE + 1];
@@ -53,50 +53,53 @@ struct MessagePeerData
 // Text message
 struct MessageText
 {
-    uint8 code;
-    uint32 length;
+    uint8 _code;
+    uint32 _length;
     char _peerId[PEER_ID_SIZE + 1];
     // "open array", we don't know about size of data. This field will have address in struct.
-    wchar_t text[1];
+    wchar_t _text[1];
 };
 
 #define SZ_MESSAGE_TEXT (sizeof(uint8) + sizeof(uint32) + sizeof(char[PEER_ID_SIZE + 1]))
 
 // File information message (First message, which file-sender send, when sending file)
-struct MessageFileBegin
+struct MessageFileInfo
 {
-    uint8 code;
-    uint32 id;
-    uint32 totalBlocks;
-    uint32 nameLength;
-    char name[1];
+    uint8 _code;
+    uint32 _id;
+    uint32 _totalBlocks;
+    uint32 _nameLength;
+    char _peerId[PEER_ID_SIZE + 1];
+    char _name[1];
 };
 
-#define SZ_MESSAGE_FILE_BEGIN (sizeof(uint8) + 3 * sizeof(uint32))
+#define SZ_MESSAGE_FILE_INFO (sizeof(uint8) + 3 * sizeof(uint32) + sizeof(char[PEER_ID_SIZE + 1]))
 
 // File block message
 struct MessageFileBlock
 {
-    uint8 code;
-    uint32 id;
-    uint32 block;
-    uint32 size;
-    char data[1];
+    uint8 _code;
+    uint32 _id;
+    uint32 _block;
+    uint32 _size;
+    char _peerId[PEER_ID_SIZE + 1];
+    char _data[1];
 };
 
-#define SZ_MESSAGE_FILE_BLOCK (sizeof(uint8) + 3 * sizeof(uint32))
+#define SZ_MESSAGE_FILE_BLOCK (sizeof(uint8) + 3 * sizeof(uint32) + sizeof(char[PEER_ID_SIZE + 1]))
 
 #define FILE_BLOCK_MAX (6 * 1024)
 
 // File block message, which is re-sent
-struct MessageResendFileBlock
+struct MessageRequestForFileBlock
 {
-    uint8 code;
-    uint32 id;
-    uint32 block;
+    uint8 _code;
+    uint32 _id;
+    uint32 _block;
+    char _peerId[PEER_ID_SIZE + 1];
 };
 
-#define SZ_MESSAGE_RESEND_FILE_BLOCK (sizeof(uint8) + 2 * sizeof(uint32))
+#define SZ_MESSAGE_REQUEST_FOR_FILE_BLOCK (sizeof(uint8) + 2 * sizeof(uint32) + sizeof(char[PEER_ID_SIZE + 1]))
 
 #pragma pack(pop)
 

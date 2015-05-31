@@ -7,7 +7,7 @@ ChatClient* ChatClient::Handler::_chatClient = 0;
 
 void ChatClient::HandlerSys::handle(cc_string data, size_t size)
 {
-    MessageSys* msgSys = (MessageSys*)data;
+    MessageSystem* msgSys = (MessageSystem*)data;
 
     string action;
     action.assign(msgSys->_action);
@@ -36,37 +36,11 @@ void ChatClient::HandlerSys::handle(cc_string data, size_t size)
     }
     else if (action == "ping")
     {
-        if (peerId == _chatClient->_thisPeer.GetId())
-        {
-            return;
-        }
-        else if (it == _chatClient->_peersMap.end())
-        {
-            Logger::GetInstance()->Trace("Received 'ping' message from unknown peer ", peerId);
-            return;
-        }
-        else
-        {
-            it->second.ShouldSendPong(true);
-            it->second.SetAliveCheck(time(0));
-        }
+        
     }
     else if (action == "pong")
     {
-        if (peerId == _chatClient->_thisPeer.GetId())
-        {
-            return;
-        }
-        else if (it == _chatClient->_peersMap.end())
-        {
-            Logger::GetInstance()->Trace("Received 'alive' message from unknown peer ", peerId);
-            return;
-        }
-        else
-        {
-            it->second.SetPongReceived(true);
-            it->second.SetAliveCheck(time(0));
-        }
+       
     }
 }
 
@@ -90,10 +64,10 @@ void ChatClient::HandlerText::handle(cc_string data, size_t size)
     }
     else
     {
-        it->second.SetAliveCheck(time(0));
+        it->second.SetLastActivityCheck(time(0));
         wcout << endl << it->second.GetNickname() << " > ";
     }
-    wcout.write(msgText->text, msgText->length);
+    wcout.write(msgText->_text, msgText->_length);
     wcout << endl;
 }
 
@@ -119,64 +93,64 @@ void ChatClient::HandlerPeerData::handle(cc_string data, size_t size)
 
         Peer foundPeer(peerNick, peerId);
         foundPeer.SetIp(_chatClient->_recvEndpoint.address().to_string());
-        foundPeer.SetAliveCheck(time(0));
+        foundPeer.SetLastActivityCheck(time(0));
         _chatClient->_peersMap.insert(pair<cc_string, Peer>(peerId.c_str(), foundPeer));
     }    
 }
 
-void ChatClient::HandlerFileBegin::handle(cc_string data, size_t)
+void ChatClient::HandlerFileInfo::handle(cc_string data, size_t)
 {
-    MessageFileBegin* mfb = (MessageFileBegin*)data;
+    MessageFileInfo* mfb = (MessageFileInfo*)data;
     auto_ptr< UploadingFilesContext > ctx(new UploadingFilesContext);
 
     // maybe we have the same already (is downloading)
     stringstream ss;
-    ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfb->id;
+    ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfb->_id;
     string key(ss.str());
 
-    UploadingFilesMap::iterator it = _chatClient->_files.find(key);
-    if (it != _chatClient->_files.end())
+    UploadingFilesMap::iterator it = _chatClient->_uploadingFiles.find(key);
+    if (it != _chatClient->_uploadingFiles.end())
     {
         ss.str(string());
-        ss << "This file is already downloading '" << mfb->name << "'";
+        ss << "This file is already downloading '" << mfb->_name << "'";
         _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
         return;
     }
 
     // try to open
 
-    if (mfb->nameLength > 256)
-        mfb->nameLength = 256;
+    if (mfb->_nameLength > 256)
+        mfb->_nameLength = 256;
 
-    mfb->name[mfb->nameLength] = '\0';
+    mfb->_name[mfb->_nameLength] = '\0';
 
-    ctx->fp.open(mfb->name, ios_base::out | ios_base::trunc | ios_base::binary);
+    ctx->fp.open(mfb->_name, ios_base::out | ios_base::trunc | ios_base::binary);
 
     if (!ctx->fp.is_open())
     {
         ss.str(string());
-        ss << "can't open for writing '" << mfb->name << "'";
+        ss << "can't open for writing '" << mfb->_name << "'";
         _chatClient->PrintSystemMsg(_chatClient->_recvEndpoint, ss.str());
         return;
     }
 
-    Logger::GetInstance()->Trace("Start downloading file ", mfb->name);
+    Logger::GetInstance()->Trace("Start downloading file ", mfb->_name);
 
     // fill in the fields
     ctx->endpoint = _chatClient->_recvEndpoint;
     ctx->endpoint.port(_chatClient->_port);
-    ctx->id = mfb->id;
-    ctx->blocks = mfb->totalBlocks;
+    ctx->id = mfb->_id;
+    ctx->blocks = mfb->_totalBlocks;
     ctx->resendCount = 0;
     ctx->blocksReceived = 0;
-    ctx->name = string(mfb->name, mfb->nameLength);
+    ctx->name = string(mfb->_name, mfb->_nameLength);
     ctx->ts = time(0);
 
     // requesting the first packet
     _chatClient->SendResendMsgInternal(ctx.get());
 
     // save this for the next use
-    _chatClient->_files[key] = ctx.release();
+    _chatClient->_uploadingFiles[key] = ctx.release();
     return;
 }
 
@@ -185,21 +159,21 @@ void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
     MessageFileBlock* mfp = (MessageFileBlock*)data;
 
     stringstream ss;
-    ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfp->id;
+    ss << _chatClient->_recvEndpoint.address().to_string() << ":" << mfp->_id;
 
     string key(ss.str());
     UploadingFilesContext* ctx = 0;
-    UploadingFilesMap::iterator it = _chatClient->_files.find(key);
-    if (it != _chatClient->_files.end())
-        ctx = _chatClient->_files[key];
+    UploadingFilesMap::iterator it = _chatClient->_uploadingFiles.find(key);
+    if (it != _chatClient->_uploadingFiles.end())
+        ctx = _chatClient->_uploadingFiles[key];
 
-    if (ctx == 0 || mfp->block >= ctx->blocks)
+    if (ctx == 0 || mfp->_block >= ctx->blocks)
     {
         Logger::GetInstance()->Trace("Received block for file ", ctx->name, " is out of queue!");
         return;
     }
 
-    ctx->fp.write(mfp->data, mfp->size);
+    ctx->fp.write(mfp->_data, mfp->_size);
     ctx->resendCount = 0;
     ctx->blocksReceived += 1;
     ctx->ts = time(0);
@@ -209,29 +183,29 @@ void ChatClient::HandlerFileBlock::handle(cc_string data, size_t)
     if (ctx->blocks == ctx->blocksReceived)
     {
         Logger::GetInstance()->Trace("Done loading file ", ctx->name);
-        _chatClient->_files.erase(_chatClient->_files.find(key));
+        _chatClient->_uploadingFiles.erase(_chatClient->_uploadingFiles.find(key));
         ctx->fp.close();
         delete ctx;
         return;
     }
 
-    if (!(mfp->block % 89))
+    if (!(mfp->_block % 89))
     {
         ss.str(string());
-        ss << "Downloaded block " << mfp->block << " from " << ctx->blocks;
+        ss << "Downloaded block " << mfp->_block << " from " << ctx->blocks;
         Logger::GetInstance()->Trace("File: ", ctx->name, ". ", ss.str());
     }
 
     // requesting the next block
 
-    _chatClient->SendTo(ctx->endpoint, MessageBuilder::ResendableFileBlock(ctx->id, ctx->blocksReceived));
+    _chatClient->SendTo(ctx->endpoint, MessageBuilder::RequestForFileBlock(ctx->id, ctx->blocksReceived, string())); //TODO: remove the stub
 
     return;
 }
 
-void ChatClient::HandlerResendFileBlock::handle(cc_string data, size_t)
+void ChatClient::HandlerRequestForFileBlock::handle(cc_string data, size_t)
 {
-    MessageResendFileBlock* mrfp = (MessageResendFileBlock*)data;
+    MessageRequestForFileBlock* mrfp = (MessageRequestForFileBlock*)data;
 
     if (SIMULATE_PACKET_LOOSING == 1)
     {
@@ -240,11 +214,11 @@ void ChatClient::HandlerResendFileBlock::handle(cc_string data, size_t)
             return;
     }
 
-    if (_chatClient->_filesSent.find(mrfp->id) == _chatClient->_filesSent.end())
+    if (_chatClient->_sendingFiles.find(mrfp->_id) == _chatClient->_sendingFiles.end())
         return;
 
-    SentFilesContext * fsc = _chatClient->_filesSent[mrfp->id];
-    if (mrfp->block >= fsc->totalBlocks)
+    SendingFilesContext * fsc = _chatClient->_sendingFiles[mrfp->_id];
+    if (mrfp->_block >= fsc->totalBlocks)
         return;
 
     // open file
@@ -260,13 +234,13 @@ void ChatClient::HandlerResendFileBlock::handle(cc_string data, size_t)
     // read and send needed block
 
     char raw[FILE_BLOCK_MAX];
-    input.seekg(mrfp->block * FILE_BLOCK_MAX);
+    input.seekg(mrfp->_block * FILE_BLOCK_MAX);
     input.read(raw, sizeof(raw));
 
-    _chatClient->SendTo(fsc->endpoint, MessageBuilder::FileBlock(mrfp->id, mrfp->block, raw, (uint32)input.gcount()));
+    _chatClient->SendTo(fsc->endpoint, MessageBuilder::FileBlock(mrfp->_id, mrfp->_block, raw, (uint32)input.gcount(), string())); //TODO: remove the stub
 
     input.close();
 
-    if (mrfp->block == 0)
+    if (mrfp->_block == 0)
         fsc->firstBlockSent = true;
 }

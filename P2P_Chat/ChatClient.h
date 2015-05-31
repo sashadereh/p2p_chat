@@ -27,29 +27,34 @@ private:
     // downloading files
     struct UploadingFilesContext
     {
-        UdpEndpoint endpoint;             // from
-        uint32 blocks;              // total blocks
-        uint32 blocksReceived;      // received blocks
-        uint32 resendCount;         // sending requests (for one block!)
-        uint32 id;                  // file id on the receiver side
-        ofstream fp;                      // read from it
-        time_t ts;                        // last block received
-        string name;                      // file name
+        Peer _recvFrom;
+        UdpEndpoint endpoint;
+        uint32 blocks;          // total blocks
+        uint32 blocksReceived;  // received blocks
+        uint32 resendCount;     // sending requests (for one block!)
+        uint32 id;              // file id on the receiver side
+        ofstream fp;            // read from it
+        time_t ts;              // last block received
+        string name;            // file name
     };
-    typedef map< string, UploadingFilesContext* > UploadingFilesMap;
+    typedef map<string, UploadingFilesContext*> UploadingFilesMap;
 
     // sent files
-    struct SentFilesContext
+    struct SendingFilesContext
     {
-        UdpEndpoint endpoint;               // to
-        uint32 id;                    // file id on the sender side
-        uint32 totalBlocks;            // total blocks
+        Peer _sendTo;
+        UdpEndpoint endpoint;   // to
+        uint32 id;              // file id on the sender side
+        uint32 totalBlocks;     // total blocks
         string    path;                        // file path
         bool firstBlockSent;                   // has first block been sent?
         time_t ts;                            // first block sent
         uint32 resendCount;            // sending requests (for one block!)
+        string _peerId;                 //send to it
     };
-    typedef map< unsigned, SentFilesContext* > SentFilesMap;
+    typedef map<unsigned, SendingFilesContext*> SendingFilesMap;
+
+    typedef map<cc_string, Peer> PeersMap;
 
     // Handlers
 
@@ -79,7 +84,7 @@ private:
         void handle(cc_string data, size_t size);
     };
 
-    class HandlerFileBegin : public Handler {
+    class HandlerFileInfo : public Handler {
     public:
         void handle(cc_string data, size_t size);
     };
@@ -89,7 +94,7 @@ private:
         void handle(cc_string data, size_t size);
     };
 
-    class HandlerResendFileBlock : public Handler {
+    class HandlerRequestForFileBlock : public Handler {
     public:
         void handle(cc_string data, size_t size);
     };
@@ -104,17 +109,16 @@ private:
     volatile uint8 _runThreads;
     boost::array<char, 64 * 1024> _data;    
     uint32 _fileId;
-    UploadingFilesMap _files;
-    SentFilesMap _filesSent;
+    UploadingFilesMap _uploadingFiles;
+    SendingFilesMap _sendingFiles;
     Mutex _filesMutex;
     Mutex _peersMapMutex;
     Handlers _handlers;
     Peer _thisPeer;
-    map<cc_string, Peer> _peersMap;
+    PeersMap _peersMap;
 
     void BoostServiceThread();
     void ServiceFilesWatcher();
-    void ChatServiceThread();
 
     // async
 
@@ -135,7 +139,7 @@ private:
     void SendFileInternal(const UdpEndpoint& endpoint, const wstring& path);
     void SendTo(const UdpEndpoint& endpoint, const string& m);
     void SendResendMsgInternal(UploadingFilesContext* ctx);
-    void SendFileInfoMsgInternal(SentFilesContext* ctx);
+    void SendFileInfoMsgInternal(SendingFilesContext* ctx);
 };
 
 #endif // CHAT_CLIENT_H

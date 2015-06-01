@@ -60,6 +60,8 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
         Logger::GetInstance()->Trace(CHAT_ERROR, "Can't get local ip due to ", e.what());
     }
 
+    Logger::GetInstance()->Trace("My peer id: ", _thisPeer.GetId());
+
     // Socket for sending
     _sendSocket.open(_sendEndpoint.protocol());
     _sendSocket.set_option(UdpSocket::reuse_address(true));
@@ -123,6 +125,11 @@ ChatClient::~ChatClient()
 
     for (Handlers::iterator it = _handlers.begin(); it != _handlers.end(); ++it)
         delete (*it);
+
+    // Delete all peers
+
+    for (PeersMap::iterator it = _peersMap.begin(); it != _peersMap.end(); ++it)
+        delete((*it).second);
 }
 
 ChatClient& ChatClient::GetInstance()
@@ -164,29 +171,27 @@ void ChatClient::ServiceFilesWatcher()
             //scan map of peers
             for (PeersMap::iterator it = _peersMap.begin(); it != _peersMap.end();)
             {
-                if (!it->second.WasHandshake())
+                Peer* peer = (*it).second;
+                if (difftime(time(0), peer->GetLastActivityCheck()) > SECONDS_TO_BE_ALIVE)
                 {
-                    SendTo(_sendEndpoint, MessageBuilder::PeerData(_thisPeer.GetNickname(), _thisPeer.GetId()));
-                    it->second.MakeHandshake();
-                }
-                else if (it->second.ShouldSendPong())
-                {
-                    SendTo(ParseEpFromString(it->second.GetIp()), MessageBuilder::System("pong", _thisPeer.GetId()));
-                    it->second.ShouldSendPong(false);
-                }
-                else if (difftime(time(0), it->second.GetLastActivityCheck()) > SECONDS_TO_BE_ALIVE)
-                {
-                    if (!it->second.WasPingSent())
+                    if (!peer->WasPingSent())
                     {
-                        SendTo(ParseEpFromString(it->second.GetIp()), MessageBuilder::System("ping", _thisPeer.GetId()));
-                        it->second.SetPingSent(true);
-                        it->second.SetPingSentTime(time(0));
+                        Logger::GetInstance()->Trace("Sending ping to peer ", peer->GetId());
+                        SendTo(ParseEpFromString(peer->GetIp()), MessageBuilder::System("ping", _thisPeer.GetId()));
+                        peer->SetPingSent(true);
+                        peer->SetPingSentTime(time(0));
+                        ++it;
+                        continue;
                     }
-                    else if (difftime(time(0), it->second.GetPingSentTime()) > SECONDS_TO_BE_ALIVE)
+                    else if (difftime(time(0), peer->GetPingSentTime()) > SECONDS_TO_BE_ALIVE)
                     {
-                        // Delete from peers map
+                        Logger::GetInstance()->Trace("Peer ", peer->GetId(), " is offline. Deleting it from peers map");
+                        _peersMap.erase(it++);
+                        delete peer;
+                        continue;
                     }
                 }
+                ++it;
             }
 
             // scan map with files, that we receive
@@ -269,13 +274,9 @@ void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
     MessageSystem * pmsys = (MessageSystem*)_data.data();
     if (pmsys->_code <= LAST)
     {
-        if (pmsys->_code < M_FILE_BEGIN || pmsys->_code > M_REQ_FOR_FILE_BLOCK)
-            _peersMapMutex.lock();
-
         ScopedLock lk(_filesMutex);
         (_handlers[pmsys->_code])->handle(_data.data(), size);
     }
-    _peersMapMutex.unlock();
 
     // wait for the next message
     _recvSocket.async_receive_from(

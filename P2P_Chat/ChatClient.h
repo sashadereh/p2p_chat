@@ -54,7 +54,7 @@ private:
     };
     typedef map<unsigned, SendingFilesContext*> SendingFilesMap;
 
-    typedef map<cc_string, Peer> PeersMap;
+    typedef map<string, Peer*> PeersMap;
 
     // Handlers
 
@@ -112,7 +112,6 @@ private:
     UploadingFilesMap _uploadingFiles;
     SendingFilesMap _sendingFiles;
     Mutex _filesMutex;
-    Mutex _peersMapMutex;
     Handlers _handlers;
     Peer _thisPeer;
     PeersMap _peersMap;

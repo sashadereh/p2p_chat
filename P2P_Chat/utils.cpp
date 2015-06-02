@@ -7,3 +7,10 @@ string to_string(const wstring& wstr)
 
     return converterX.to_bytes(wstr);
 }
+
+bool IsIpV4(const string& ip)
+{
+    ErrorCode err;
+    IpAddress addr(IpAddress::from_string(ip, err));
+    return !err ? true : false;
+}

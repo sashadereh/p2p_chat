@@ -8,7 +8,7 @@ std::string MessageBuilder::System(cc_string action, const string& peerId)
     size_t rawLen = strlen(action) + 1;
     raw.resize(rawLen + SZ_MESSAGE_SYS, 0);
 
-    MessageSys* msgSys = (MessageSys*)raw.data();
+    MessageSystem* msgSys = (MessageSystem*)raw.data();
 
     msgSys->_code = M_SYS;
     memcpy(msgSys->_action, action, rawLen);
@@ -41,54 +41,57 @@ std::string MessageBuilder::Text(const wstring& msg, const string& peerId)
 
     MessageText* msgText = (MessageText*)raw.data();
 
-    msgText->code = M_TEXT;
-    msgText->length = msg.length();
-    memcpy(msgText->text, msg.data(), rawLen);
+    msgText->_code = M_TEXT;
+    msgText->_length = msg.length();
+    memcpy(msgText->_text, msg.data(), rawLen);
     memcpy(msgText->_peerId, peerId.c_str(), PEER_ID_SIZE + 1);
 
     return raw;
 }
 
-string MessageBuilder::FileBegin(uint32 id, uint32 totalBlocks, const string& fileName)
+std::string MessageBuilder::FileBegin(uint32 id, uint32 totalBlocks, const string& name, const string& peerId)
 {
     string raw;
-    size_t rawLen = fileName.length() * sizeof(char);
-    raw.resize(rawLen + SZ_MESSAGE_FILE_BEGIN, 0);
+    size_t rawLen = name.length() * sizeof(char);
+    raw.resize(rawLen + SZ_MESSAGE_FILE_INFO, 0);
 
-    MessageFileBegin* pfb = (MessageFileBegin*)raw.data();
-    pfb->code = M_FILE_BEGIN;
-    pfb->id = id;
-    pfb->totalBlocks = totalBlocks;
-    pfb->nameLength = fileName.length();
-    memcpy(pfb->name, fileName.data(), rawLen);
+    MessageFileInfo* msgFileInfo = (MessageFileInfo*)raw.data();
+    msgFileInfo->_code = M_FILE_BEGIN;
+    msgFileInfo->_id = id;
+    msgFileInfo->_totalBlocks = totalBlocks;
+    msgFileInfo->_nameLength = name.length();
+    memcpy(msgFileInfo->_name, name.data(), rawLen);
+    memcpy(msgFileInfo->_peerId, peerId.c_str(), PEER_ID_SIZE + 1);
 
     return raw;
 }
 
-string MessageBuilder::FileBlock(uint32 id, uint32 block, cc_string data, uint32 size)
+std::string MessageBuilder::FileBlock(uint32 id, uint32 block, cc_string data, uint32 size, const string& peerId)
 {
     string raw;
     raw.resize(FILE_BLOCK_MAX + size, 0);
-    MessageFileBlock* pfp = (MessageFileBlock*)raw.data();
+    MessageFileBlock* msgFileBlock = (MessageFileBlock*)raw.data();
 
-    pfp->code = M_FILE_BLOCK;
-    pfp->id = id;
-    pfp->block = block;
-    pfp->size = size;
-    memcpy(pfp->data, data, size);
+    msgFileBlock->_code = M_FILE_BLOCK;
+    msgFileBlock->_id = id;
+    msgFileBlock->_block = block;
+    msgFileBlock->_size = size;
+    memcpy(msgFileBlock->_data, data, size);
+    memcpy(msgFileBlock->_peerId, peerId.c_str(), PEER_ID_SIZE + 1);
 
     return raw;
 }
 
-string MessageBuilder::ResendableFileBlock(uint32 id, uint32 block)
+std::string MessageBuilder::RequestForFileBlock(uint32 id, uint32 block, const string& peerId)
 {
     string raw;
-    raw.resize(SZ_MESSAGE_RESEND_FILE_BLOCK, 0);
-    MessageResendFileBlock* ms = (MessageResendFileBlock*)raw.data();
+    raw.resize(SZ_MESSAGE_REQUEST_FOR_FILE_BLOCK, 0);
+    MessageRequestForFileBlock* msgReqForFileBlock = (MessageRequestForFileBlock*)raw.data();
 
-    ms->code = M_RESEND_FILE_BLOCK;
-    ms->id = id;
-    ms->block = block;
+    msgReqForFileBlock->_code = M_REQ_FOR_FILE_BLOCK;
+    msgReqForFileBlock->_id = id;
+    msgReqForFileBlock->_block = block;
+    memcpy(msgReqForFileBlock->_peerId, peerId.c_str(), PEER_ID_SIZE + 1);
 
     return raw;
 }

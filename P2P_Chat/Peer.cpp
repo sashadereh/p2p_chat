@@ -1,19 +1,19 @@
 #include "Peer.h"
 
-Peer::Peer(const wstring& nick, const string& peerId) : _handshake(false), _pingSent(false)
-{
+Peer::Peer(const wstring& nick, const string& peerId) : _pingSent(false)
+{    
     SetNickname(nick);
     if (!peerId.empty())
         _id = peerId;
     else
         GenerateId();
-    SetAliveCheck(time(0));
+    SetLastActivityCheck(time(0));
 }
 
-Peer::Peer(bool makeHandshake) : _handshake(makeHandshake), _pingSent(false)
+Peer::Peer() : _pingSent(false)
 {
     GenerateId();
-    SetAliveCheck(time(0));
+    SetLastActivityCheck(time(0));
 }
 
 

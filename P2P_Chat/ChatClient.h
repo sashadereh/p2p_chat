@@ -11,8 +11,6 @@ class ChatClient
 public:
     virtual ~ChatClient();
     static ChatClient& GetInstance();
-    const string& GetPeerId() const { return _thisPeer.GetId(); }
-    const wstring& GetPeerNick() const { return _thisPeer.GetNickname(); }
 
     int loop();
 
@@ -54,7 +52,7 @@ private:
     };
     typedef map<unsigned, SendingFilesContext*> SendingFilesMap;
 
-    typedef map<string, Peer*> PeersMap;
+    typedef map<string, Peer*> Peers;
 
     // Handlers
 
@@ -114,7 +112,7 @@ private:
     Mutex _filesMutex;
     Handlers _handlers;
     Peer _thisPeer;
-    PeersMap _peersMap;
+    Peers _peersMap;
 
     void BoostServiceThread();
     void ServiceFilesWatcher();
@@ -127,18 +125,18 @@ private:
 
     UdpEndpoint ParseEpFromString(const string&);
     void ParseUserInput(const wstring& data);
-    void ParseTwoStrings(const wstring& str, string& s1, wstring& s2);
-    void PrintSystemMsg(const UdpEndpoint& endpoint, const string& msg);
+    void ParseTwoStrings(const wstring& str, wstring& s1, wstring& s2);
+    vector<Peer*> ProcessNick(const wstring& nick);
 
     // senders
 
-    void SendSystemMsgInternal(const UdpEndpoint& endpoint, cc_string action);
+    void SendSystemMsg(const UdpEndpoint& endpoint, cc_string action);
     void SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id);
-    void SendTextInternal(const UdpEndpoint& endpoint, const wstring& message);
-    void SendFileInternal(const UdpEndpoint& endpoint, const wstring& path);
+    void SendText(const UdpEndpoint& endpoint, const wstring& message);
+    void SendFile(const UdpEndpoint& endpoint, const wstring& path);
     void SendTo(const UdpEndpoint& endpoint, const string& m);
-    void SendResendMsgInternal(UploadingFilesContext* ctx);
-    void SendFileInfoMsgInternal(SendingFilesContext* ctx);
+    void SendReqForFileBlockMsg(UploadingFilesContext* ctx);
+    void SendFileInfoMsg(SendingFilesContext* ctx);
 };
 
 #endif // CHAT_CLIENT_H

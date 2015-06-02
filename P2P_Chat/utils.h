@@ -20,7 +20,7 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/filesystem.hpp>
 
-#define SIMULATE_PACKET_LOOSING 0
+#define SIMULATE_PACKET_LOOSING 1
 
 #define LOG_THREAD "LoggerThread"
 #define BOOST_SERVICE_THREAD "BoostServiceThread"
@@ -58,6 +58,7 @@ static uint16 Port = 54321;
 static bool DoShutdown = false;
 static map<cc_string, auto_ptr<Thread>> ThreadsMap;
 
-string to_string(const wstring& str);
+bool IsIpV4(const string& ip);
+string to_string(const wstring& wstr);
 
 #endif // UTILS_H

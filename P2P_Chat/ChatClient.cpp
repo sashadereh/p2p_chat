@@ -128,7 +128,7 @@ ChatClient::~ChatClient()
 
     // Delete all peers
 
-    for (PeersMap::iterator it = _peersMap.begin(); it != _peersMap.end(); ++it)
+    for (Peers::iterator it = _peersMap.begin(); it != _peersMap.end(); ++it)
         delete((*it).second);
 }
 
@@ -169,7 +169,7 @@ void ChatClient::ServiceFilesWatcher()
             ScopedLock lk(_filesMutex);
             
             //scan map of peers
-            for (PeersMap::iterator it = _peersMap.begin(); it != _peersMap.end();)
+            for (Peers::iterator it = _peersMap.begin(); it != _peersMap.end();)
             {
                 Peer* peer = (*it).second;
                 if (difftime(time(0), peer->GetLastActivityCheck()) > SECONDS_TO_BE_ALIVE)
@@ -185,7 +185,9 @@ void ChatClient::ServiceFilesWatcher()
                     }
                     else if (difftime(time(0), peer->GetPingSentTime()) > SECONDS_TO_BE_ALIVE)
                     {
-                        Logger::GetInstance()->Trace("Peer ", peer->GetId(), " is offline. Deleting it from peers map");
+                        Logger::GetInstance()->Trace("Peer ", peer->GetId(), " don't answer on 'ping'. Removing it from peers map");
+                        wcout << peer->GetNickname();
+                        cout << " left out chat." << endl;
                         _peersMap.erase(it++);
                         delete peer;
                         continue;
@@ -208,7 +210,10 @@ void ChatClient::ServiceFilesWatcher()
                 if (fc->resendCount >= ATTEMPTS_TO_RECEIVE_BLOCK)
                 {
                     // delete this download
-                    Logger::GetInstance()->Trace(CHAT_ERROR, "Download of ", fc->name, " ended with ERROR: peer ", fc->_recvFrom.GetId(), " is offline");
+                    ss.str(string());
+                    ss << "Download of " << fc->name << " ended with ERROR: peer " << fc->_recvFrom.GetId() << " is offline";
+                    Logger::GetInstance()->Trace(CHAT_ERROR, ss.str());
+                    cout << endl << ss.str() << endl;
                     _uploadingFiles.erase(it++);
                     fc->fp.close();
 
@@ -225,12 +230,13 @@ void ChatClient::ServiceFilesWatcher()
                 if (fc->blocksReceived > 0)
                 {
                     ss.str(string());
-                    ss << "Request dropped packet " << fc->blocksReceived << " from " << fc->blocks;
-                    Logger::GetInstance()->Trace("File ", fc->name, ": ", ss.str());
+                    ss << "File " << fc->name << ": Request dropped packet " << fc->blocksReceived << " from " << fc->blocks;
+                    Logger::GetInstance()->Trace(ss.str());
+                    cout << endl << ss.str() << endl;
                 }
 
                 fc->resendCount += 1;
-                SendResendMsgInternal(fc);
+                SendReqForFileBlockMsg(fc);
                 ++it;
             }
 
@@ -249,7 +255,10 @@ void ChatClient::ServiceFilesWatcher()
                 if (fsc->resendCount >= ATTEMPTS_TO_SEND_FIRST_M)
                 {
                     // delete this download
-                    Logger::GetInstance()->Trace(CHAT_ERROR, "Sending of ", fsc->path, " ended with ERROR!");
+                    ss.str(string());
+                    ss << "Sending of ", fsc->path, " ended with ERROR: Peer doesn't request the first block";
+                    Logger::GetInstance()->Trace(CHAT_ERROR, ss.str());
+                    cout << endl << ss.str() << endl;
                     _sendingFiles.erase(it++);
                     delete fsc;
                     continue;
@@ -258,7 +267,7 @@ void ChatClient::ServiceFilesWatcher()
                 // send again
 
                 fsc->resendCount += 1;
-                SendFileInfoMsgInternal(fsc);
+                SendFileInfoMsg(fsc);
                 ++it;
             }
         }
@@ -268,7 +277,8 @@ void ChatClient::ServiceFilesWatcher()
 // async reading handler (udp socket)
 void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
 {
-    if (err) return;
+    if (err)
+        return;
 
     // parse received packet
     MessageSystem * pmsys = (MessageSystem*)_data.data();
@@ -294,53 +304,98 @@ void ChatClient::ParseUserInput(const wstring& data)
     // parse string
     if (tmp.size() > 1)
     {
-        if (tmp.at(0) == L'*')
+        wstring pmCommand = tmp.substr(0, 3);
+        wstring fileCommand = tmp.substr(0, 5);
+        if (pmCommand == L"pm ")
         {
-            // no asterisks (system message have them)
-            for (unsigned t = 0; t < tmp.size() && tmp[t] == L'*'; ++t);
-        }
-        else if (tmp.at(0) == L'@')
-        {
-            // Maybe, it is the private message (PM) such format:
-            // @ip message
-            string  ip;
+            // Maybe, it is the private message (PM):
+            wstring nickOrIp;
             wstring msg;
-            tmp.erase(0, 1);
-            ParseTwoStrings(tmp, ip, msg);
-            if (ip.empty() || msg.empty())
+            tmp.erase(0, 3);
+            ParseTwoStrings(tmp, nickOrIp, msg);
+            if (nickOrIp.empty() || msg.empty())
             {
                 throw logic_error("invalid format.");
             }
             else
             {
-                SendTextInternal(ParseEpFromString(ip), msg);
+                string ip = to_string(nickOrIp);
+                ScopedLock lk(_filesMutex);
+                if (IsIpV4(ip))
+                    SendText(ParseEpFromString(ip), msg);
+                else
+                {
+                    vector<Peer*> peers = ProcessNick(nickOrIp);
+                    if (peers.size() == 0)
+                    {
+                        cout << "\nThere is no peer ";
+                        wcout << nickOrIp << "!" << endl;
+                    }                        
+                    else if (peers.size() == 1)
+                    {
+                        SendText(ParseEpFromString(peers[0]->GetIp()), msg);
+                    }
+                    else
+                    {
+                        cout << "\nThere are several peers with nick ";
+                        wcout << nickOrIp << "!" << endl;
+                        for (size_t i = 0; i < peers.size(); i++)
+                            cout << "\nPeer " << i << ": " << peers[i]->GetIp();
+                        cout << "\nTry to send a PM directly using peer's ip." << endl;
+                    }
+                }
             }
             return;
 
         }
-        else if (tmp.find(L"file ") == 0)
+        else if (fileCommand == L"file ")
         {
-            // Maybe, users wants to send the file:
-            // file ip path
-            tmp.erase(0, 5);
-            string  ip;
+            // Maybe, users wants to send the file
+            wstring nickOrIp;
             wstring path;
-            ParseTwoStrings(tmp, ip, path);
-            if (ip.empty() || path.empty())
+            tmp.erase(0, 5);
+            ParseTwoStrings(tmp, nickOrIp, path);
+            if (nickOrIp.empty() || path.empty())
             {
                 throw logic_error("invalid format.");
             }
-            else {
-                SendFileInternal(ParseEpFromString(ip), path);
+            else
+            {
+                string ip = to_string(nickOrIp);
+                ScopedLock lk(_filesMutex);
+                if (IsIpV4(ip))
+                    SendFile(ParseEpFromString(ip), path);
+                else
+                {
+                    vector<Peer*> peers = ProcessNick(nickOrIp);
+                    if (peers.size() == 0)
+                    {
+                        cout << "\nThere is no peer ";
+                        wcout << nickOrIp << "!" << endl;
+                    }
+                    else if (peers.size() == 1)
+                    {
+                        SendFile(ParseEpFromString(peers[0]->GetIp()), path);
+                    }
+                    else
+                    {
+                        cout << "\nThere are several peers with nick ";
+                        wcout << nickOrIp << "!" << endl;
+                        for (size_t i = 0; i < peers.size(); i++)
+                            cout << "\nPeer " << i << ": " << peers[i]->GetIp();
+                        cout << "\nTry to send a file directly using peer's ip." << endl;
+                    }
+                }
             }
             return;
         }
     }
 
-    if (tmp.empty()) return;
+    if (tmp.empty())
+        return;
 
     // send on broadcast address
-    SendTextInternal(_sendEndpoint, tmp);
+    SendText(_sendEndpoint, tmp);
 }
 
 // get endpoint from string
@@ -359,28 +414,37 @@ UdpEndpoint ChatClient::ParseEpFromString(const string& ip)
     }
 }
 
-// print system message
-
-void ChatClient::PrintSystemMsg(const UdpEndpoint& endpoint, const string& msg)
-{
-    cout << endpoint.address().to_string() << " > " << "*** " << msg << " ***" << endl;
-}
-
 // split a string into two strings by first space-symbol
 
-void ChatClient::ParseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
+void ChatClient::ParseTwoStrings(const wstring& str, wstring& s1, wstring& s2)
 {
     s1.clear();
     s2.clear();
 
     // try to find first space-symbol
-    wstring::size_type t = tmp.find_first_of(L" \t");
+    wstring::size_type t = str.find_first_of(L" \t");
 
     if (t == wstring::npos)
         return;
 
-    s1 = string(tmp.begin(), tmp.begin() + t);
-    s2 = tmp.substr(t + 1);
+    s1 = wstring(str.begin(), str.begin() + t);
+    s2 = str.substr(t + 1);
+}
+
+// returns a vector of pointers to Peers which have the processable nick
+
+vector<Peer*> ChatClient::ProcessNick(const wstring& nick)
+{
+    vector<Peer*> peers;
+    Peer* peer;
+    for (Peers::const_iterator it = _peersMap.begin(); it != _peersMap.end(); it++)
+    {
+        peer = (*it).second;
+        if (nick == peer->GetNickname())
+            peers.push_back(peer);
+    }
+
+    return peers;
 }
 
 // Main loop of application
@@ -390,12 +454,24 @@ int ChatClient::loop()
     try
     {
         cout << "\t\t\tNice to meet you in P2P-Chat!" << endl;
+
+        cout << "Usage:" << endl;
+
+        cout << "1. sending broadcast message:" << endl;
+        cout << "\tjust type message & press enter" << endl;
+
+        cout << "2. sending private message:" << endl;
+        cout << "\t@ [nickname] [message]" << endl;
+        cout << "\t@ [ip] [message]" << endl;
+
+        cout << "3. sending file:" << endl;
+        cout << "\tfile [nickname] [path]" << endl;
+        cout << "\tfile [ip] [path]" << endl;
         wstring nick;
         do 
         {
             nick.clear();
-            cout << endl;
-            cout << "Please, type your nick > ";
+            cout << "\nPlease, type your nick > ";
             getline(wcin, nick);
         } while (nick.empty());
         _thisPeer.SetNickname(nick);
@@ -404,7 +480,6 @@ int ChatClient::loop()
 
         for (wstring line;;)
         {
-            cout << endl;
             getline(wcin, line);
             // delete spaces to the right
             if (line.empty() == false)
@@ -421,7 +496,12 @@ int ChatClient::loop()
             if (line.empty())
                 continue;
             else if (line.compare(L"quit") == 0)
+            {
+                Logger::GetInstance()->Trace("Shutdown");
+                SendSystemMsg(_sendEndpoint, "quit");
+                _runThreads = 0;
                 break;
+            }
 
             try
             {
@@ -432,9 +512,6 @@ int ChatClient::loop()
                 cout << "ERR: " << e.what() << endl;
             }
         }
-        Logger::GetInstance()->Trace("Shutdown");
-        _runThreads = 0;
-        SendSystemMsgInternal(_sendEndpoint,"quit");
     }
     catch (const exception& e)
     {
@@ -446,10 +523,10 @@ int ChatClient::loop()
 
 // system message
 
-void ChatClient::SendSystemMsgInternal(const UdpEndpoint& endpoint, cc_string action)
+void ChatClient::SendSystemMsg(const UdpEndpoint& endpoint, cc_string action)
 {
     ScopedLock lk(_filesMutex);
-    SendTo(endpoint, MessageBuilder::System(action, _thisPeer.GetId().c_str()));
+    SendTo(endpoint, MessageBuilder::System(action, _thisPeer.GetId()));
 }
 
 void ChatClient::SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nick, const string&id)
@@ -460,24 +537,22 @@ void ChatClient::SendPeerDataMsg(const UdpEndpoint& endpoint, const wstring& nic
 
 // text message
 
-void ChatClient::SendTextInternal(const UdpEndpoint& endpoint, const wstring& msg)
+void ChatClient::SendText(const UdpEndpoint& endpoint, const wstring& msg)
 {
-    ScopedLock lk(_filesMutex);
-    SendTo(endpoint, MessageBuilder::Text(msg, _thisPeer.GetId().c_str()));
+    SendTo(endpoint, MessageBuilder::Text(msg, _thisPeer.GetId()));
 }
 
 // send file message
 
-void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& path)
+void ChatClient::SendFile(const UdpEndpoint& endpoint, const wstring& path)
 {
-    ScopedLock lk(_filesMutex);
     string filePath(path.begin(), path.end());
 
     ifstream input;
     input.open(filePath.c_str(), ifstream::in | ios_base::binary);
     if (!input.is_open())
     {
-        cerr << "Error! Can't open file " << filePath << endl;
+        cerr << "\nError! Can't open file " << filePath << endl;
 
         input.close();
 
@@ -499,12 +574,14 @@ void ChatClient::SendFileInternal(const UdpEndpoint& endpoint, const wstring& pa
     _sendingFiles[_fileId] = fsc;
     _fileId += 1;
 
-    SendFileInfoMsgInternal(fsc);
+    Logger::GetInstance()->Trace("Start sending file ", filePath);
+    cout << "\nStart sending file" << endl;
+    SendFileInfoMsg(fsc);
 }
 
 // make and send block of file
 
-void ChatClient::SendFileInfoMsgInternal(SendingFilesContext * ctx)
+void ChatClient::SendFileInfoMsg(SendingFilesContext * ctx)
 {
     string fileName(ctx->path.begin(), ctx->path.end());
 
@@ -514,7 +591,7 @@ void ChatClient::SendFileInfoMsgInternal(SendingFilesContext * ctx)
         throw logic_error("Can't open file!");
 
     // count quantity of blocks
-    unsigned blocks = 0;
+    uint32 blocks = 0;
     input.seekg(0, ifstream::end);
     blocks = (uint32)(input.tellg() / FILE_BLOCK_MAX);
     if (input.tellg() % FILE_BLOCK_MAX)
@@ -531,17 +608,17 @@ void ChatClient::SendFileInfoMsgInternal(SendingFilesContext * ctx)
 
     // make packet and send M_FI
 
-    SendTo(ctx->endpoint, MessageBuilder::FileBegin(ctx->id, ctx->totalBlocks, fileName, string())); // TODO: remove a stub
+    SendTo(ctx->endpoint, MessageBuilder::FileBegin(ctx->id, ctx->totalBlocks, fileName, _thisPeer.GetId()));
 
     ctx->ts = time(0);
 }
 
 // make and send message with request of re-sending file block
 
-void ChatClient::SendResendMsgInternal(UploadingFilesContext* ctx)
+void ChatClient::SendReqForFileBlockMsg(UploadingFilesContext* ctx)
 {
     SendTo(ctx->endpoint, MessageBuilder::RequestForFileBlock(
-        ctx->id, ctx->blocksReceived, string()));   // TODO: remove a stub
+        ctx->id, ctx->blocksReceived, _thisPeer.GetId()));
 }
 
 void ChatClient::SendTo(const UdpEndpoint& e, const string& m)

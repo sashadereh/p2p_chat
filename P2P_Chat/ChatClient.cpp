@@ -82,14 +82,14 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     In this thread io_service is ran
     We can't read user's input without it
     */
-    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(BOOST_SERVICE_THREAD,
+    ThreadsMap.insert(pair<string, auto_ptr<Thread>>(BOOST_SERVICE_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::BoostServiceThread, this)))));
     /*
     It is our system thread
     Here we send alive messages, send PeerData messages, track track all downloading files and send a re-send message
     if time of received block less than sender pointed out
     */
-    ThreadsMap.insert(pair<cc_string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
+    ThreadsMap.insert(pair<string, auto_ptr<Thread>>(FILESWATCHER_THREAD,
         auto_ptr<Thread>(new Thread(boost::bind(&ChatClient::ServiceFilesWatcher, this)))));
 
 }

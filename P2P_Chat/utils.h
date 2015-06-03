@@ -61,7 +61,7 @@ typedef unsigned long uint64;
 // Global variables
 static uint16 Port = 54321;
 static bool DoShutdown = false;
-static map<cc_string, auto_ptr<Thread>> ThreadsMap;
+static map<string, auto_ptr<Thread>> ThreadsMap;
 
 bool IsIpV4(const string& ip);
 string to_string(const wstring& wstr);

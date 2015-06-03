@@ -12,7 +12,12 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+
+#ifdef __linux__
+#include <boost/locale/encoding_utf.hpp>
+#elif _WIN32
 #include <codecvt>
+#endif
 
 #include <boost/asio.hpp>
 #include <boost/array.hpp>

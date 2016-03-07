@@ -3,19 +3,27 @@
 
 int main(int argc, char ** argv)
 {
+    bool useMulticasts = false;
     if (argc > 1)
     {
-        try
+        for (int i = 1; i < argc - 1; i++)
         {
-            PORT = boost::lexical_cast<int>(argv[1]);
-        }
-        catch (const boost::bad_lexical_cast& err)
-        {
-            cerr << err.what();
+            if (strcmp(argv[i], "-p") == 0)
+            {
+                PORT = atoi(argv[++i]);
+            }
+            else if (strcmp(argv[i], "-m") == 0)
+            {
+                useMulticasts = true;
+            }
         }
     }
 
     ChatClient* chatInstance = &ChatClient::GetInstance();
+    if (useMulticasts)
+    {
+        chatInstance->SetUsingMulticasts(useMulticasts);
+    }
 
     try
     {

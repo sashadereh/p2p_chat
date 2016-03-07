@@ -464,3 +464,10 @@ void ChatClient::sendTo(const UdpEndpoint& e, const string& m)
 {
     _sendSocket.send_to(boost::asio::buffer(m), e);
 }
+
+void ChatClient::SetUsingMulticasts(bool usingMulticasts)
+{
+    _useMulticasts = usingMulticasts;
+    std::cout << "Multicasts enabled. Print \"mc message\" to send a multicast message." << std::endl;
+    // Join group here
+}

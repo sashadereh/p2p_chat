@@ -12,6 +12,7 @@ public:
     static ChatClient& GetInstance();
 
     int loop();
+    void SetUsingMulticasts(bool usingMulticasts);
 
 private:
     // singleton class
@@ -101,6 +102,7 @@ private:
     auto_ptr<Thread> _watcherThread;
     volatile int _threadsRunned;
     int _port;
+    bool _useMulticasts;
     uint _fileId;
     UploadingFilesMap _files;
     SentFilesMap _filesSent;

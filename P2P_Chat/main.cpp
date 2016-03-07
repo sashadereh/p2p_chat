@@ -6,7 +6,7 @@ int main(int argc, char ** argv)
     bool useMulticasts = false;
     if (argc > 1)
     {
-        for (int i = 1; i < argc - 1; i++)
+        for (int i = 1; i < argc; i++)
         {
             if (strcmp(argv[i], "-p") == 0)
             {
@@ -27,7 +27,7 @@ int main(int argc, char ** argv)
 
     try
     {
-        return chatInstance->loop();
+        return chatInstance->Loop();
     }
     catch (logic_error& err)
     {

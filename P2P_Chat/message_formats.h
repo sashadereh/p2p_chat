@@ -5,14 +5,11 @@
 
 enum MessageType
 {
-    msgEnter,
-    msgQuit,
-    msgText,
-    msgFileBegin,
-    msgFileBlock,
-    msgResendFileBlock,
-    msgFirst = msgEnter,
-    msgLast = msgResendFileBlock
+    MT_ENTER,
+    MT_QUIT,
+    MT_TEXT,
+    MT_FIRST = MT_ENTER,
+    MT_LAST = MT_TEXT
 };
 
 /*
@@ -48,42 +45,6 @@ struct MessageText
 };
 
 #define SZ_MESSAGE_TEXT (SZ_MESSAGE_SYS + sizeof(uint))
-
-// File information message (First message, which file-sender send, when sending file)
-struct MessageFileBegin
-{
-    unsigned char code;
-    uint id;
-    uint totalBlocks;
-    uint nameLength;
-    char name[1];
-};
-
-#define SZ_MESSAGE_FILE_BEGIN (SZ_MESSAGE_SYS + 3 * sizeof(uint))
-
-// File block message
-struct MessageFileBlock
-{
-    unsigned char code;
-    uint id;
-    uint block;
-    uint size;
-    char data[1];
-};
-
-#define SZ_MESSAGE_FILE_BLOCK (SZ_MESSAGE_SYS + 3 * sizeof(uint))
-
-#define FILE_BLOCK_MAX (6 * 1024)
-
-// File block message, which is re-sent
-struct MessageResendFileBlock
-{
-    unsigned char code;
-    uint id;
-    uint block;
-};
-
-#define SZ_MESSAGE_RESEND_FILE_BLOCK (SZ_MESSAGE_SYS + 2 * sizeof(uint))
 
 #pragma pack(pop)
 

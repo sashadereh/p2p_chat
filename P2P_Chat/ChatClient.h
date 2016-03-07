@@ -11,7 +11,7 @@ public:
     virtual ~ChatClient();
     static ChatClient& GetInstance();
 
-    int loop();
+    int Loop();
     void SetUsingMulticasts(bool usingMulticasts);
 
 private:
@@ -21,33 +21,6 @@ private:
     ChatClient();
     ChatClient(const ChatClient& src);
     ChatClient& operator=(const ChatClient& rval);
-
-    // downloading files
-    struct UploadingFilesContext
-    {
-        UdpEndpoint endpoint;             // from
-        uint blocks;              // total blocks
-        uint blocksReceived;      // received blocks
-        uint resendCount;         // sending requests (for one block!)
-        uint id;                  // file id on the receiver side
-        ofstream fp;                      // read from it
-        time_t ts;                        // last block received
-        string name;                      // file name
-    };
-    typedef map< string, UploadingFilesContext* > UploadingFilesMap;
-
-    // sent files
-    struct SentFilesContext
-    {
-        UdpEndpoint endpoint;               // to
-        uint id;                    // file id on the sender side
-        uint totalBlocks;            // total blocks
-        string    path;                        // file path
-        bool firstBlockSent;                   // has first block been sent?
-        time_t ts;                            // first block sent
-        uint resendCount;            // sending requests (for one block!)
-    };
-    typedef map< unsigned, SentFilesContext* > SentFilesMap;
 
     // Handlers
 
@@ -77,21 +50,6 @@ private:
         void handle(const char* data, size_t size);
     };
 
-    class handlerFileBegin : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerFileBlock : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
-    class handlerResendFileBlock : public Handler {
-    public:
-        void handle(const char* data, size_t size);
-    };
-
     boost::asio::io_service _ioService;
     UdpSocket _sendSocket;
     UdpSocket _recvSocket;
@@ -99,20 +57,14 @@ private:
     UdpEndpoint _recvEndpoint;
     boost::array<char, 64 * 1024> _data;
     auto_ptr<Thread> _serviceThread;
-    auto_ptr<Thread> _watcherThread;
-    volatile int _threadsRunned;
+    volatile int _threadsRun;
     int _port;
     bool _useMulticasts;
-    uint _fileId;
-    UploadingFilesMap _files;
-    SentFilesMap _filesSent;
-    Mutex _filesMutex;
     Handlers _handlers;
 
     // async
 
     void serviceThread();
-    void serviceFilesWatcher();
     void handleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
 
     // parsing
@@ -126,10 +78,7 @@ private:
 
     void sendSysMsg(unsigned sysMsg);
     void sendMsg(const UdpEndpoint& endpoint, const wstring& message);
-    void sendFile(const UdpEndpoint& endpoint, const wstring& path);
     void sendTo(const UdpEndpoint& endpoint, const string& m);
-    void sendResendMsg(UploadingFilesContext* ctx);
-    void sendFirstFileMsg(SentFilesContext* ctx);
 };
 
 #endif // CHAT_CLIENT_H

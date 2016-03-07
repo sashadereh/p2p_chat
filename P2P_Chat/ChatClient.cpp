@@ -15,9 +15,9 @@
 unique_ptr<ChatClient> ChatClient::_instance;
 once_flag ChatClient::_onceFlag;
 
-ChatClient::ChatClient() : _sendSocket(_ioService)
-    , _recvSocket(_ioService)
-    , _sendEndpoint(Ipv4Address::broadcast(), PORT)
+ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(_ioService), _recvSocket(_ioService)
+    , _sendBrdcastEndpoint(Ipv4Address::broadcast(), PORT)
+    , _sendMulticastEndpoint(IpAddress::from_string(MULTICAST_ADDR), PORT)
     , _recvEndpoint(Ipv4Address::any(), PORT)
     , _threadsRun(1)
     , _port(PORT)
@@ -26,7 +26,7 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     // Get local ip
     try
     {
-        boost::asio::ip::udp::resolver   resolver(_ioService);
+        boost::asio::ip::udp::resolver resolver(_ioService);
         boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), boost::asio::ip::host_name(), "");
         boost::asio::ip::udp::resolver::iterator endpoints = resolver.resolve(query);
         UdpEndpoint ep = *endpoints;
@@ -49,12 +49,14 @@ ChatClient::ChatClient() : _sendSocket(_ioService)
     _handlers[MT_QUIT] = new handlerQuit;
     _handlers[MT_TEXT] = new handlerText;
 
-    // Socket for sending
-    _sendSocket.open(_sendEndpoint.protocol());
-    _sendSocket.set_option(UdpSocket::reuse_address(true));
-    _sendSocket.set_option(boost::asio::socket_base::broadcast(true));
+    // Socket for sending broadcasts
+    _sendBrdcastSocket.open(_sendBrdcastEndpoint.protocol());
+    _sendBrdcastSocket.set_option(UdpSocket::reuse_address(true));
+    _sendBrdcastSocket.set_option(boost::asio::socket_base::broadcast(true));
 
-    // Socket for receiving (including broadcast packets)
+    // Socket for sending multicasts
+
+    // Socket for receiving (including broadcast/multicast packets)
     _recvSocket.open(_recvEndpoint.protocol());
     _recvSocket.set_option(UdpSocket::reuse_address(true));
     _recvSocket.set_option(boost::asio::socket_base::broadcast(true));
@@ -77,7 +79,7 @@ ChatClient::~ChatClient()
     _threadsRun = 0;
 
     _recvSocket.close();
-    _sendSocket.close();
+    _sendBrdcastSocket.close();
     _ioService.stop();
 
     // Wait for the completion of the service thread
@@ -104,16 +106,16 @@ ChatClient& ChatClient::GetInstance()
 
 void ChatClient::serviceThread()
 {
-    ErrorCode ec;
+    ErrorCode errCode;
 
     while (_threadsRun)
     {
-        _ioService.run(ec);
+        _ioService.run(errCode);
         _ioService.reset();
     }
 
-    if (ec)
-        cout << ec.message();
+    if (errCode)
+        cerr << errCode.message();
 }
 
 // async reading handler (udp socket)
@@ -122,10 +124,10 @@ void ChatClient::handleReceiveFrom(const ErrorCode& err, size_t size)
     if (err) return;
 
     // parse received packet
-    MessageSys * pmsys = (MessageSys*)_data.data();
-    if (pmsys->code <= MT_LAST)
+    MessageSys * receivedMsg = (MessageSys*)_data.data();
+    if (receivedMsg->code <= MT_LAST)
     {
-        (_handlers[pmsys->code])->handle(_data.data(), size);
+        (_handlers[receivedMsg->code])->handle(_data.data(), size);
     }
 
     // wait for the next message
@@ -192,7 +194,7 @@ void ChatClient::parseUserInput(const wstring& data)
     if (tmp.empty()) return;
 
     // send on broadcast address
-    sendMsg(_sendEndpoint, tmp);
+    sendMsg(_sendBrdcastEndpoint, tmp);
 }
 
 // get endpoint from string
@@ -205,20 +207,18 @@ UdpEndpoint ChatClient::parseEpFromString(const string& ip)
     {
         throw logic_error("can't parse this IP");
     }
-    else {
+    else
+    {
         return UdpEndpoint(addr, _port);
     }
 }
-
-// print system message
 
 void ChatClient::printSysMessage(const UdpEndpoint& endpoint, const string& msg)
 {
     cout << endpoint.address().to_string() << " > " << "*** " << msg << " ***" << endl;
 }
 
-// split a string into two strings by first space-symbol
-
+// Split a string into two strings by first space-symbol
 void ChatClient::parseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
 {
     s1.clear();
@@ -234,8 +234,7 @@ void ChatClient::parseTwoStrings(const wstring& tmp, string& s1, wstring& s2)
     s2 = tmp.substr(t + 1);
 }
 
-// read user's input
-
+// Read user's input
 int ChatClient::Loop()
 {
     try
@@ -266,28 +265,28 @@ int ChatClient::Loop()
                 // parse string
                 parseUserInput(line);
             }
-            catch (const logic_error& e) {
-                cout << "ERR: " << e.what() << endl;
+            catch (const logic_error& e)
+            {
+                cout << "ERROR: " << e.what() << endl;
             }
         }
         sendSysMsg(MT_QUIT);
     }
-    catch (const exception& e) {
+    catch (const exception& e)
+    {
         cout << e.what() << endl;
     }
 
     return 0;
 }
 
-// system message
-
+// System message
 void ChatClient::sendSysMsg(unsigned sysMsg)
 {
-    sendTo(_sendEndpoint, MessageBuilder::system(sysMsg));
+    sendTo(_sendBrdcastEndpoint, MessageBuilder::system(sysMsg));
 }
 
-// text message
-
+// Text message
 void ChatClient::sendMsg(const UdpEndpoint& endpoint, const wstring& msg)
 {
     sendTo(endpoint, MessageBuilder::text(msg));
@@ -295,12 +294,12 @@ void ChatClient::sendMsg(const UdpEndpoint& endpoint, const wstring& msg)
 
 void ChatClient::sendTo(const UdpEndpoint& e, const string& m)
 {
-    _sendSocket.send_to(boost::asio::buffer(m), e);
+    _sendBrdcastSocket.send_to(boost::asio::buffer(m), e);
 }
 
 void ChatClient::SetUsingMulticasts(bool usingMulticasts)
 {
     _useMulticasts = usingMulticasts;
     std::cout << "Multicasts enabled. Print \"mc message\" to send a multicast message." << std::endl;
-    // Join group here
+    // Join multicasts group
 }

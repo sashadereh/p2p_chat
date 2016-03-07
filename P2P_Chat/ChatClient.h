@@ -23,7 +23,6 @@ private:
     ChatClient& operator=(const ChatClient& rval);
 
     // Handlers
-
     class Handler
     {
     public:
@@ -51,9 +50,11 @@ private:
     };
 
     boost::asio::io_service _ioService;
-    UdpSocket _sendSocket;
+    UdpSocket _sendBrdcastSocket;
+    UdpSocket _sendMulticastSocket;
     UdpSocket _recvSocket;
-    UdpEndpoint _sendEndpoint;
+    UdpEndpoint _sendBrdcastEndpoint;
+    UdpEndpoint _sendMulticastEndpoint;
     UdpEndpoint _recvEndpoint;
     boost::array<char, 64 * 1024> _data;
     auto_ptr<Thread> _serviceThread;

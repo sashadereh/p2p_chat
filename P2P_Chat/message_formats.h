@@ -40,7 +40,7 @@ struct MessageText
 {
     unsigned char code;
     uint length;
-    // "open array", we don't know about size of data. This field will have address in struct.
+    // "open array", we don't know about size of data. This field will just have address in struct.
     wchar_t text[1];
 };
 

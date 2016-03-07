@@ -14,7 +14,7 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
-#define SIMULATE_PACKET_LOOSING 0
+#define MULTICAST_ADDR ""
 
 using namespace std;
 
@@ -24,7 +24,6 @@ typedef boost::asio::ip::address IpAddress;
 typedef boost::asio::ip::address_v4 Ipv4Address;
 
 typedef boost::thread Thread;
-typedef boost::mutex Mutex;
 
 typedef boost::system::error_code ErrorCode;
 

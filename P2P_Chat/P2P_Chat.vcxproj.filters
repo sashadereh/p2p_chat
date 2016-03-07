@@ -32,9 +32,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="handlers.cpp">
-      <Filter>Resource Files</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -42,10 +39,13 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ChatClient.cpp">
-      <Filter>Resource Files</Filter>
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="handlers.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MessageBuilder.cpp">
-      <Filter>Resource Files</Filter>
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

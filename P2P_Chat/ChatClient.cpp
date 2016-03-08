@@ -22,6 +22,7 @@ ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(
     , _threadsRun(1)
     , _port(PORT)
     , _useMulticasts(false)
+    , _pingTimer(_ioService, boost::posix_time::seconds(PING_TIMER_FREQ))
 {
     // Get local ip
     try
@@ -34,7 +35,8 @@ ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(
         socket.connect(ep);
 
         IpAddress addr = socket.local_endpoint().address();
-        std::cout << "Chat client started. Using ip = " << addr.to_string() << ", listening port = " << PORT << std::endl;
+        _localIp = addr.to_string();
+        std::cout << "Chat client started. Using ip = " << _localIp << ", listening port = " << PORT << std::endl;
     }
     catch (exception& e)
     {
@@ -54,12 +56,6 @@ ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(
     _sendBrdcastSocket.set_option(UdpSocket::reuse_address(true));
     _sendBrdcastSocket.set_option(boost::asio::socket_base::broadcast(true));
 
-    /*
-    // Socket for sending multicasts
-    _sendMulticastSocket.open(_sendMulticastEndpoint.protocol());
-    _sendMulticastSocket.set_option(UdpSocket::reuse_address(true));
-    */
-
     // Socket for receiving (including broadcast/multicast packets)
     _recvSocket.open(_recvEndpoint.protocol());
     _recvSocket.set_option(UdpSocket::reuse_address(true));
@@ -70,6 +66,9 @@ ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(
         boost::bind(&ChatClient::HandleReceiveFrom, this,
         boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
+
+    // Timer for checking if peers still alive (ping)
+    _pingTimer.async_wait(boost::bind(&ChatClient::CheckPingCallback, this, boost::asio::placeholders::error));
 
     /*
     In this thread io_service is ran
@@ -106,8 +105,18 @@ ChatClient& ChatClient::GetInstance()
     return *_instance.get();
 }
 
-// Thread function
+int ChatClient::GetPeerIndexByIp(const string &ip)
+{
+    for (Peers::const_iterator it = _peers.begin(); it != _peers.end(); it++)
+    {
+        if (it->_ipAddr == ip)
+            return it - _peers.begin();
+    }
 
+    return 0;
+}
+
+// Thread function
 void ChatClient::ServiceThread()
 {
     ErrorCode errCode;
@@ -122,15 +131,30 @@ void ChatClient::ServiceThread()
         cerr << errCode.message();
 }
 
-// async reading handler (udp socket)
+// Async reading handler (udp socket)
 void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
 {
-    if (err) return;
+    if (err)
+        return;
 
     // parse received packet
     MessageSys * receivedMsg = (MessageSys*)_data.data();
     if (receivedMsg->code <= MT_LAST)
     {
+        string remoteIp = _recvEndpoint.address().to_string();
+        int peerIndex = GetPeerIndexByIp(remoteIp);
+        if (remoteIp != _localIp && peerIndex == 0)
+        {
+            PeerInfo newPeerInfo;
+            newPeerInfo._ipAddr = remoteIp;
+            newPeerInfo.SetOnline();
+            _peers.push_back(newPeerInfo);
+        }
+        else if (peerIndex != 0)
+        {
+            _peers.at(peerIndex).SetOnline();
+        }
+
         (_handlers[receivedMsg->code])->Handle(_data.data(), size);
     }
 
@@ -142,7 +166,7 @@ void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
         boost::asio::placeholders::bytes_transferred));
 }
 
-// try to understand user's input
+// Try to understand user's input
 void ChatClient::ParseUserInput(const wstring& data)
 {
     wstring tmp(data);
@@ -310,4 +334,34 @@ void ChatClient::SetUsingMulticasts(bool usingMulticasts)
         cout << "Multicasts disabled" << endl;
         _recvSocket.set_option(boost::asio::ip::multicast::leave_group(IpAddress::from_string(MULTICAST_ADDR)));
     }
+}
+
+void ChatClient::CheckPingCallback(const ErrorCode &ec)
+{
+    Peers::iterator it = _peers.begin();
+    while (it != _peers.end())
+    {
+        time_t lastSeen = it->_lastSeen;
+        if (time(NULL) - lastSeen > START_PING_INTERVAL)
+        {
+            PeerState peerState = it->_state;
+            if (peerState != PS_PING_SENT_THRICE)
+            {
+                //SendPing
+                it->SetNextState();
+                it++;
+            }
+            else
+            {
+                //Print sys msg
+                it = _peers.erase(it);
+            }
+        }
+        else
+            it++;
+    }
+
+    _pingTimer.expires_at(_pingTimer.expires_at() + boost::posix_time::seconds(PING_TIMER_FREQ));
+    _pingTimer.async_wait(boost::bind(&ChatClient::CheckPingCallback, this, boost::asio::placeholders::error));
+
 }

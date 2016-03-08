@@ -50,6 +50,35 @@ private:
         void Handle(const char* data, size_t size);
     };
 
+    enum PeerState
+    {
+        PS_ONLINE,
+        PS_PING_SENT_ONCE,
+        PS_PING_SENT_TWICE,
+        PS_PING_SENT_THRICE
+    };
+
+    struct PeerInfo
+    {
+        time_t _lastSeen;
+        string _ipAddr;
+        PeerState _state;
+        
+        void SetOnline()
+        {
+            _state = PS_ONLINE;
+            _lastSeen = time(NULL);
+        }
+
+        void SetNextState()
+        {
+            if (_state != PS_PING_SENT_THRICE)
+                _state = PeerState((int)_state + 1);
+        }
+    };
+    typedef vector<PeerInfo> Peers;
+    int GetPeerIndexByIp(const string &ip);
+
     boost::asio::io_service _ioService;
     UdpSocket _sendBrdcastSocket;
     UdpSocket _sendMulticastSocket;
@@ -63,10 +92,14 @@ private:
     int _port;
     bool _useMulticasts;
     Handlers _handlers;
+    Timer _pingTimer;
+    string _localIp;
+    Peers _peers;
 
     // Async
     void ServiceThread();
-    void HandleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
+    void HandleReceiveFrom(const ErrorCode &error, size_t bytes_recvd);
+    void CheckPingCallback(const ErrorCode &ec);
 
     // Parsing
     UdpEndpoint ParseEpFromString(const string&);

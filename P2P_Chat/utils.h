@@ -14,7 +14,7 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
-#define MULTICAST_ADDR ""
+#define MULTICAST_ADDR "239.255.0.1"
 
 using namespace std;
 

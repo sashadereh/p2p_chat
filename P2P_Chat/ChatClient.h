@@ -13,6 +13,7 @@ public:
 
     int Loop();
     void SetUsingMulticasts(bool usingMulticasts);
+    bool IsUsingMulticasts() { return _useMulticasts; }
 
 private:
     // singleton class
@@ -27,26 +28,26 @@ private:
     {
     public:
         virtual ~Handler() {}
-        virtual void handle(const char *data, size_t size) = 0;
-        static void setChatInstance(ChatClient* chatClient) { _chatClient = chatClient; }
+        virtual void Handle(const char *data, size_t size) = 0;
+        static void SetChatInstance(ChatClient* chatClient) { _chatClient = chatClient; }
     protected:
         static ChatClient* _chatClient;
     };
     typedef vector< Handler* > Handlers;
 
-    class handlerEnter : public Handler {
+    class HandlerEnterMsg : public Handler {
     public:
-        void handle(const char* data, size_t size);
+        void Handle(const char* data, size_t size);
     };
 
-    class handlerQuit : public Handler {
+    class HandlerQuitMsg : public Handler {
     public:
-        void handle(const char* data, size_t size);
+        void Handle(const char* data, size_t size);
     };
 
-    class handlerText : public Handler {
+    class HandlerTextMsg : public Handler {
     public:
-        void handle(const char* data, size_t size);
+        void Handle(const char* data, size_t size);
     };
 
     boost::asio::io_service _ioService;
@@ -63,23 +64,20 @@ private:
     bool _useMulticasts;
     Handlers _handlers;
 
-    // async
+    // Async
+    void ServiceThread();
+    void HandleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
 
-    void serviceThread();
-    void handleReceiveFrom(const ErrorCode& error, size_t bytes_recvd);
+    // Parsing
+    UdpEndpoint ParseEpFromString(const string&);
+    void ParseUserInput(const wstring& data);
+    void ParseTwoStrings(const wstring& str, string& s1, wstring& s2);
+    void PrintSysMessage(const UdpEndpoint& endpoint, const string& msg);
 
-    // parsing
-
-    UdpEndpoint parseEpFromString(const string&);
-    void parseUserInput(const wstring& data);
-    void parseTwoStrings(const wstring& str, string& s1, wstring& s2);
-    void printSysMessage(const UdpEndpoint& endpoint, const string& msg);
-
-    // senders
-
-    void sendSysMsg(unsigned sysMsg);
-    void sendMsg(const UdpEndpoint& endpoint, const wstring& message);
-    void sendTo(const UdpEndpoint& endpoint, const string& m);
+    // Senders
+    void SendSysMsg(unsigned sysMsg);
+    void SendMsg(const UdpEndpoint& endpoint, const wstring& message);
+    void SendTo(const UdpEndpoint& endpoint, const string& m);
 };
 
 #endif // CHAT_CLIENT_H

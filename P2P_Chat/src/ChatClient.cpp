@@ -24,6 +24,7 @@ ChatClient::ChatClient() : _sendSocket(_ioService), _recvSocket(_ioService)
     , _useMulticasts(false)
     , _pingTimer(_ioService, boost::posix_time::seconds(PING_TIMER_FREQ))
 {
+#if defined _WIN32
     // Get local ip
     try
     {
@@ -37,13 +38,16 @@ ChatClient::ChatClient() : _sendSocket(_ioService), _recvSocket(_ioService)
         _localEndpoint = socket.local_endpoint();
         IpAddress addr = _localEndpoint.address();
         _localIp = addr.to_string();
-        std::cout << "Chat client started. Using ip = " << _localIp << ", listening port = " << PORT << std::endl;
+        cout << "Chat client started. Using ip = " << _localIp << ", listening port = " << PORT << endl;
     }
     catch (exception& e)
     {
-        std::cerr << "Could not get local ip. Exception: " << e.what() << endl;
+        cerr << "Could not get local ip. Exception: " << e.what() << endl;
         exit(-1);
     }
+#elif defined __linux
+    cout << "Chat client started. Listening port = " << PORT << endl;
+#endif
 
     // Create handlers
     Handler::SetChatInstance(this);
@@ -58,7 +62,9 @@ ChatClient::ChatClient() : _sendSocket(_ioService), _recvSocket(_ioService)
     _sendSocket.open(_sendBrdcastEndpoint.protocol());
     _sendSocket.set_option(UdpSocket::reuse_address(true));
     _sendSocket.set_option(boost::asio::socket_base::broadcast(true));
+#if defined _WIN32
     _sendSocket.bind(_localEndpoint);
+#endif
 
     // Socket for receiving (including broadcast/multicast packets)
     _recvSocket.open(_recvEndpoint.protocol());

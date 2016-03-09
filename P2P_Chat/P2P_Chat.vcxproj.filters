@@ -15,30 +15,30 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="message_formats.h">
+    <ClInclude Include="src\ChatClient.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="utils.h">
+    <ClInclude Include="src\message_formats.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="MessageBuilder.h">
+    <ClInclude Include="src\MessageBuilder.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ChatClient.h">
+    <ClInclude Include="src\utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="src\ChatClient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ChatClient.cpp">
+    <ClCompile Include="src\handlers.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="handlers.cpp">
+    <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="MessageBuilder.cpp">
+    <ClCompile Include="src\MessageBuilder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -18,6 +18,18 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\ChatClient.h" />
+    <ClInclude Include="src\MessageBuilder.h" />
+    <ClInclude Include="src\message_formats.h" />
+    <ClInclude Include="src\utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\ChatClient.cpp" />
+    <ClCompile Include="src\handlers.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\MessageBuilder.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{EA7FCE1F-5220-4768-A776-C07398F697B5}</ProjectGuid>
     <RootNamespace>P2P_Chat</RootNamespace>
@@ -132,18 +144,6 @@
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="ChatClient.h" />
-    <ClInclude Include="MessageBuilder.h" />
-    <ClInclude Include="message_formats.h" />
-    <ClInclude Include="utils.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="ChatClient.cpp" />
-    <ClCompile Include="handlers.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="MessageBuilder.cpp" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

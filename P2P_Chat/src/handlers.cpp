@@ -13,6 +13,11 @@ void ChatClient::HandlerEnterMsg::Handle(const char*, size_t)
 void ChatClient::HandlerQuitMsg::Handle(const char*, size_t)
 {
     _chatClient->PrintSysMessage(_chatClient->_recvEndpoint, "quit from chat");
+    int index = _chatClient->GetPeerIndexByIp(_chatClient->_recvEndpoint.address().to_string());
+    if (index != -1)
+    {
+        _chatClient->_peers.erase(_chatClient->_peers.begin() + index);
+    }
 }
 
 void ChatClient::HandlerPingMsg::Handle(const char*, size_t)

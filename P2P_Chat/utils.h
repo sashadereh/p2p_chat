@@ -27,6 +27,9 @@ typedef boost::asio::ip::address IpAddress;
 typedef boost::asio::ip::address_v4 Ipv4Address;
 typedef boost::asio::deadline_timer Timer;
 
+typedef boost::mutex Mutex;
+typedef boost::mutex::scoped_lock ScopedLock;
+
 typedef boost::thread Thread;
 
 typedef boost::system::error_code ErrorCode;

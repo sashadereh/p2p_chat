@@ -7,16 +7,14 @@ enum MessageType
 {
     MT_ENTER,
     MT_QUIT,
+    MT_PING,
+    MT_PONG,
     MT_TEXT,
     MT_FIRST = MT_ENTER,
     MT_LAST = MT_TEXT
 };
 
 /*
-Compiler can "align" fields of the structure. Yes, optimization.
-We don't allow "him" to do it.
-Compiler make this in order to optimize the speed of access to struct's fields. (Multiple of a pow(2))
-
 For example:
     struct MyStruct
     {

@@ -50,6 +50,8 @@ ChatClient::ChatClient() : _sendSocket(_ioService), _recvSocket(_ioService)
     _handlers.resize(MT_LAST + 1);
     _handlers[MT_ENTER] = new HandlerEnterMsg;
     _handlers[MT_QUIT] = new HandlerQuitMsg;
+    _handlers[MT_PING] = new HandlerPingMsg;
+    _handlers[MT_PONG] = new HandlerPongMsg;
     _handlers[MT_TEXT] = new HandlerTextMsg;
 
     // Socket for sending broadcasts
@@ -115,7 +117,7 @@ int ChatClient::GetPeerIndexByIp(const string &ip)
             return it - _peers.begin();
     }
 
-    return 0;
+    return -1;
 }
 
 // Thread function
@@ -143,21 +145,26 @@ void ChatClient::HandleReceiveFrom(const ErrorCode& err, size_t size)
     MessageSys * receivedMsg = (MessageSys*)_data.data();
     if (receivedMsg->code <= MT_LAST)
     {
+        ScopedLock lk(_pingMutex);
         string remoteIp = _recvEndpoint.address().to_string();
         int peerIndex = GetPeerIndexByIp(remoteIp);
-        if (remoteIp != _localIp && peerIndex == 0)
+        if (remoteIp != _localIp && peerIndex == -1)
         {
             PeerInfo newPeerInfo;
             newPeerInfo._ipAddr = remoteIp;
             newPeerInfo.SetOnline();
             _peers.push_back(newPeerInfo);
         }
-        else if (peerIndex != 0)
-        {
+        else if (peerIndex != -1)
+        {            
             _peers.at(peerIndex).SetOnline();
         }
 
         (_handlers[receivedMsg->code])->Handle(_data.data(), size);
+    }
+    else
+    {
+        cerr << "ERROR: Received message with invalid code!" << endl;
     }
 
     // wait for the next message
@@ -265,7 +272,7 @@ int ChatClient::Loop()
 {
     try
     {
-        SendSysMsg(MT_ENTER);
+        SendSysMsg(_sendBrdcastEndpoint, MT_ENTER);
         for (wstring line;;)
         {
             getline(wcin, line);
@@ -296,7 +303,7 @@ int ChatClient::Loop()
                 cout << "ERROR: " << e.what() << endl;
             }
         }
-        SendSysMsg(MT_QUIT);
+        SendSysMsg(_sendBrdcastEndpoint, MT_QUIT);
     }
     catch (const exception& e)
     {
@@ -307,9 +314,9 @@ int ChatClient::Loop()
 }
 
 // System message
-void ChatClient::SendSysMsg(unsigned sysMsg)
+void ChatClient::SendSysMsg(const UdpEndpoint& endpoint, unsigned sysMsg)
 {
-    SendTo(_sendBrdcastEndpoint, MessageBuilder::system(sysMsg));
+    SendTo(endpoint, MessageBuilder::system(sysMsg));
 }
 
 // Text message
@@ -340,6 +347,7 @@ void ChatClient::SetUsingMulticasts(bool usingMulticasts)
 
 void ChatClient::CheckPingCallback(const ErrorCode &ec)
 {
+    ScopedLock lk(_pingMutex);
     Peers::iterator it = _peers.begin();
     while (it != _peers.end())
     {
@@ -347,15 +355,16 @@ void ChatClient::CheckPingCallback(const ErrorCode &ec)
         if (time(NULL) - lastSeen > START_PING_INTERVAL)
         {
             PeerState peerState = it->_state;
+            UdpEndpoint peerEndpoint = UdpEndpoint(IpAddress::from_string(it->_ipAddr), PORT);
             if (peerState != PS_PING_SENT_THRICE)
             {
-                //SendPing
+                SendSysMsg(peerEndpoint, MT_PING);
                 it->SetNextState();
                 it++;
             }
             else
             {
-                //Print sys msg
+                PrintSysMessage(peerEndpoint, "quit from chat");
                 it = _peers.erase(it);
             }
         }

@@ -45,6 +45,16 @@ private:
         void Handle(const char* data, size_t size);
     };
 
+    class HandlerPingMsg : public Handler {
+    public:
+        void Handle(const char* data, size_t size);
+    };
+
+    class HandlerPongMsg : public Handler {
+    public:
+        void Handle(const char* data, size_t size);
+    };
+
     class HandlerTextMsg : public Handler {
     public:
         void Handle(const char* data, size_t size);
@@ -95,6 +105,7 @@ private:
     Timer _pingTimer;
     string _localIp;
     Peers _peers;
+    Mutex _pingMutex;
 
     // Async
     void ServiceThread();
@@ -108,7 +119,7 @@ private:
     void PrintSysMessage(const UdpEndpoint& endpoint, const string& msg);
 
     // Senders
-    void SendSysMsg(unsigned sysMsg);
+    void SendSysMsg(const UdpEndpoint& endpoint, unsigned sysMsg);
     void SendMsg(const UdpEndpoint& endpoint, const wstring& message);
     void SendTo(const UdpEndpoint& endpoint, const string& m);
 };

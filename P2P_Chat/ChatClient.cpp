@@ -15,7 +15,7 @@
 unique_ptr<ChatClient> ChatClient::_instance;
 once_flag ChatClient::_onceFlag;
 
-ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(_ioService), _recvSocket(_ioService)
+ChatClient::ChatClient() : _sendSocket(_ioService), _recvSocket(_ioService)
     , _sendBrdcastEndpoint(Ipv4Address::broadcast(), PORT)
     , _sendMulticastEndpoint(IpAddress::from_string(MULTICAST_ADDR), PORT)
     , _recvEndpoint(Ipv4Address::any(), PORT)
@@ -34,7 +34,8 @@ ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(
         UdpSocket socket(_ioService);
         socket.connect(ep);
 
-        IpAddress addr = socket.local_endpoint().address();
+        _localEndpoint = socket.local_endpoint();
+        IpAddress addr = _localEndpoint.address();
         _localIp = addr.to_string();
         std::cout << "Chat client started. Using ip = " << _localIp << ", listening port = " << PORT << std::endl;
     }
@@ -52,9 +53,10 @@ ChatClient::ChatClient() : _sendBrdcastSocket(_ioService), _sendMulticastSocket(
     _handlers[MT_TEXT] = new HandlerTextMsg;
 
     // Socket for sending broadcasts
-    _sendBrdcastSocket.open(_sendBrdcastEndpoint.protocol());
-    _sendBrdcastSocket.set_option(UdpSocket::reuse_address(true));
-    _sendBrdcastSocket.set_option(boost::asio::socket_base::broadcast(true));
+    _sendSocket.open(_sendBrdcastEndpoint.protocol());
+    _sendSocket.set_option(UdpSocket::reuse_address(true));
+    _sendSocket.set_option(boost::asio::socket_base::broadcast(true));
+    _sendSocket.bind(_localEndpoint);
 
     // Socket for receiving (including broadcast/multicast packets)
     _recvSocket.open(_recvEndpoint.protocol());
@@ -82,7 +84,7 @@ ChatClient::~ChatClient()
     _threadsRun = 0;
 
     _recvSocket.close();
-    _sendBrdcastSocket.close();
+    _sendSocket.close();
     _ioService.stop();
 
     // Wait for the completion of the service thread
@@ -318,7 +320,7 @@ void ChatClient::SendMsg(const UdpEndpoint& endpoint, const wstring& msg)
 
 void ChatClient::SendTo(const UdpEndpoint& e, const string& m)
 {
-    _sendBrdcastSocket.send_to(boost::asio::buffer(m), e);
+    _sendSocket.send_to(boost::asio::buffer(m), e);
 }
 
 void ChatClient::SetUsingMulticasts(bool usingMulticasts)
